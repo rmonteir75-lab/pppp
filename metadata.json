@@ -1,0 +1,6 @@
+{
+  "name": "SM Express - Serviços Gerais",
+  "description": "Plataforma completa de solicitação, orçamentos, agendamentos e gestão de serviços gerais para casas, empresas e condomínios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,91 @@
+<svg viewBox="0 0 500 500" width="500" height="500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="smRoyalBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#00266B" />
+      <stop offset="100%" stopColor="#001438" />
+    </linearGradient>
+    <linearGradient id="smGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#FFD000" />
+      <stop offset="50%" stopColor="#FAB400" />
+      <stop offset="100%" stopColor="#E59D00" />
+    </linearGradient>
+    <linearGradient id="smSwooshBlue" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stopColor="#001F5C" />
+      <stop offset="80%" stopColor="#00358E" />
+      <stop offset="100%" stopColor="#002266" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="250" cy="250" r="246" fill="#000000" />
+  <circle cx="250" cy="250" r="240" fill="url(#smRoyalBlueGrad)" stroke="#FAB400" strokeWidth="4" />
+  <circle cx="250" cy="250" r="218" fill="none" stroke="url(#smGoldGrad)" strokeWidth="5" />
+  <circle cx="250" cy="250" r="214" fill="#FFFFFF" />
+
+  <!-- Dynamic Swooshes -->
+  <path d="M 105 170 C 135 70, 370 60, 410 155 C 380 95, 200 90, 140 180 Z" fill="url(#smGoldGrad)" />
+  <path d="M 80 215 C 65 140, 150 75, 340 70 C 405 68, 430 110, 420 120 C 375 85, 185 95, 105 185 C 90 202, 85 220, 80 215 Z" fill="url(#smSwooshBlue)" />
+  <path d="M 80 215 C 75 235, 95 245, 165 240 C 110 248, 70 240, 80 215 Z" fill="#002266" />
+
+  <!-- "SM" Typography -->
+  <text x="250" y="215" textAnchor="middle" fill="#002266" fontFamily="'Arial Black', 'Montserrat', sans-serif" fontWeight="900" fontSize="132" letterSpacing="-4">SM</text>
+
+  <!-- "EXPRESS" Typography -->
+  <text x="250" y="288" textAnchor="middle" fill="#002266" fontFamily="'Arial Black', 'Montserrat', sans-serif" fontWeight="900" fontStyle="italic" fontSize="54" letterSpacing="2">EXPRESS</text>
+
+  <!-- "SERVIÇOS GERAIS" -->
+  <line x1="88" y1="312" x2="135" y2="312" stroke="#FAB400" strokeWidth="2.5" strokeLinecap="round" />
+  <text x="250" y="318" textAnchor="middle" fill="#002266" fontFamily="'Montserrat', 'Arial', sans-serif" fontWeight="800" fontSize="17" letterSpacing="3.5">SERVIÇOS GERAIS</text>
+  <line x1="365" y1="312" x2="412" y2="312" stroke="#FAB400" strokeWidth="2.5" strokeLinecap="round" />
+
+  <!-- 5 Houses -->
+  <g id="service-houses" transform="translate(0, 5)">
+    <!-- House 1: Eletricidade -->
+    <g transform="translate(78, 320)">
+      <path d="M 30 0 L 60 16 L 60 58 L 0 58 L 0 16 Z" fill="#00205B" />
+      <path d="M 34 16 L 22 32 L 30 32 L 26 48 L 38 30 L 30 30 Z" fill="#FFBA00" />
+    </g>
+
+    <!-- House 2: Hidráulica -->
+    <g transform="translate(148, 320)">
+      <path d="M 30 0 L 60 16 L 60 58 L 0 58 L 0 16 Z" fill="#00205B" />
+      <path d="M 22 24 L 38 24 L 38 28 L 32 28 L 32 35 L 28 35 L 28 28 L 22 28 Z" fill="#FFFFFF" />
+      <circle cx="25" cy="42" r="2.5" fill="#38BDF8" />
+      <circle cx="35" cy="42" r="2.5" fill="#38BDF8" />
+    </g>
+
+    <!-- House 3: Reformas -->
+    <g transform="translate(218, 316)">
+      <path d="M 32 0 L 64 16 L 64 62 L 0 62 L 0 16 Z" fill="#00205B" />
+      <path d="M 32 2 L 61 17 L 61 59 L 3 59 L 3 17 Z" fill="none" stroke="#FFFFFF" strokeWidth="1.5" />
+      <path d="M 23 23 L 41 41 M 41 23 L 23 41" stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" />
+    </g>
+
+    <!-- House 4: Segurança -->
+    <g transform="translate(290, 320)">
+      <path d="M 30 0 L 60 16 L 60 58 L 0 58 L 0 16 Z" fill="#00205B" />
+      <rect x="14" y="24" width="24" height="15" rx="3" fill="#FFFFFF" />
+      <polygon points="38,28 48,22 48,41 38,35" fill="#FFFFFF" />
+      <circle cx="26" cy="31.5" r="4.5" fill="#00205B" />
+      <circle cx="26" cy="31.5" r="2" fill="#38BDF8" />
+    </g>
+
+    <!-- House 5: Mudanças -->
+    <g transform="translate(360, 320)">
+      <path d="M 30 0 L 60 16 L 60 58 L 0 58 L 0 16 Z" fill="#00205B" />
+      <rect x="12" y="25" width="23" height="16" rx="1" fill="#FFFFFF" />
+      <path d="M 35 29 L 45 29 L 48 35 L 48 41 L 35 41 Z" fill="#FFFFFF" />
+      <circle cx="20" cy="42" r="4" fill="#00205B" stroke="#FFFFFF" strokeWidth="1.5" />
+      <circle cx="41" cy="42" r="4" fill="#00205B" stroke="#FFFFFF" strokeWidth="1.5" />
+    </g>
+  </g>
+
+  <!-- Banner Bottom -->
+  <path d="M 58 395 C 110 435, 390 435, 442 395 C 445 408, 430 430, 390 450 C 300 480, 200 480, 110 450 C 70 430, 55 408, 58 395 Z" fill="#001838" />
+
+  <!-- Ribbon Text -->
+  <text x="250" y="423" textAnchor="middle" fill="#FFFFFF" fontFamily="'Montserrat', 'Arial', sans-serif" fontWeight="800" fontSize="15" letterSpacing="1.8">QUALIDADE • CONFIANÇA • SEGURANÇA</text>
+
+  <!-- Slogan -->
+  <text x="250" y="453" textAnchor="middle" fill="#FAB400" fontFamily="'Montserrat', 'Arial', sans-serif" fontWeight="900" fontSize="14" letterSpacing="2">SOLUÇÕES COMPLETAS</text>
+  <text x="250" y="468" textAnchor="middle" fill="#FFFFFF" fontFamily="'Montserrat', 'Arial', sans-serif" fontWeight="700" fontSize="10.5" letterSpacing="1">PARA VOCÊ E SEU PATRIMÔNIO!</text>
+</svg>
