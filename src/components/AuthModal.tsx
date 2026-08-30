@@ -77,8 +77,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loginError, setLoginError] = useState('');
 
   // Admin Access form state
-  const [adminEmail, setAdminEmail] = useState('rmonteir75@gmail.com');
-  const [adminPassword, setAdminPassword] = useState('Rmonte14*');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminError, setAdminError] = useState('');
   const [adminSuccess, setAdminSuccess] = useState('');
@@ -1070,41 +1070,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* VIEW 2.5: DEDICATED ADMIN ACCESS (ACESSO ADM) */}
           {!currentUser && activeTab === 'admin_access' && (
             <div className="space-y-5">
-              
-              {/* Official Super Admin Quick Access Card */}
-              <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/40 p-4 rounded-2xl border-2 border-amber-400/50 shadow-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Acesso Rápido - Super Administrador</span>
-                        <span className="px-1.5 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded text-[9px] font-mono font-bold">OFICIAL</span>
-                      </div>
-                      <div className="text-[11px] text-slate-300">
-                        rmonteir75@gmail.com
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Conta principal com privilégios completos de controle de orçamentos, aprovação de prestadores, emissão de boletos & NFS-e, e relatórios executivos.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={handleQuickMasterAdminLogin}
-                  className="w-full py-2.5 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Entrar Imediatamente como ADM Master</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
               {/* Manual Admin Login Form */}
               <form onSubmit={handleAdminLoginSubmit} className="space-y-3.5 pt-1">
                 <div className="flex items-center justify-between">
@@ -1172,9 +1137,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="flex gap-2 pt-1">
                   <button
                     type="submit"
-                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2"
+                    className="flex-1 py-3 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                   >
-                    <LogIn className="w-4 h-4 text-amber-400" />
+                    <LogIn className="w-4 h-4 text-slate-950" />
                     <span>Validar e Entrar como ADM</span>
                   </button>
 

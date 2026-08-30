@@ -16,13 +16,11 @@ import {
   DollarSign,
   Phone,
   Mail,
-  MessageSquare,
-  Database
+  MessageSquare
 } from 'lucide-react';
 
 import { UserAccount, ServiceRequest } from '../types';
 import { SMExpressLogo } from './SMExpressLogo';
-import { isSupabaseConfigured } from '../lib/supabase';
 
 interface HeaderProps {
   currentView: 'client' | 'admin' | 'professional';
@@ -264,21 +262,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Controls */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Supabase Database Connection Button */}
-            {onOpenSupabaseModal && (
-              <button
-                id="supabase-status-btn"
-                onClick={onOpenSupabaseModal}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors text-xs font-semibold"
-                title="Status do Banco de Dados Supabase & Migrations"
-              >
-                <Database className={`w-3.5 h-3.5 ${isSupabaseConfigured ? 'text-emerald-400' : 'text-amber-400'}`} />
-                <span className="hidden xl:inline text-[11px]">
-                  {isSupabaseConfigured ? 'Supabase Conectado' : 'Supabase (Schema)'}
-                </span>
-              </button>
-            )}
-
             {/* Notifications Dropdown */}
             <div className="relative">
               <button
@@ -396,37 +379,23 @@ export const Header: React.FC<HeaderProps> = ({
             {/* User Profile / Auth Area */}
             <div className="flex items-center gap-1.5 sm:gap-2 pl-1.5 sm:pl-2 border-l border-slate-700/60">
               {currentUser ? (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    id="user-profile-btn"
-                    onClick={() => onOpenAuth('profile')}
-                    className="flex items-center gap-2 p-1 sm:p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 transition-all text-left"
-                  >
-                    <img
-                      src={currentUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80"}
-                      alt={currentUser.name}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-amber-400 flex-shrink-0"
-                    />
-                    <div className="hidden lg:block">
-                      <div className="text-xs font-bold text-white leading-tight max-w-[100px] xl:max-w-[120px] truncate">{currentUser.name}</div>
-                      <div className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">
-                        {currentUser.role === 'admin' ? '🛡️ Admin Master' : currentUser.role === 'profissional' ? 'Profissional' : 'Cliente'}
-                      </div>
+                <button
+                  id="user-profile-btn"
+                  onClick={() => onOpenAuth('profile')}
+                  className="flex items-center gap-2 p-1 sm:p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 transition-all text-left"
+                >
+                  <img
+                    src={currentUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80"}
+                    alt={currentUser.name}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-amber-400 flex-shrink-0"
+                  />
+                  <div className="hidden lg:block">
+                    <div className="text-xs font-bold text-white leading-tight max-w-[100px] xl:max-w-[120px] truncate">{currentUser.name}</div>
+                    <div className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">
+                      {currentUser.role === 'admin' ? '🛡️ Admin Master' : currentUser.role === 'profissional' ? 'Profissional' : 'Cliente'}
                     </div>
-                  </button>
-
-                  {currentUser.role !== 'admin' && (
-                    <button
-                      id="header-admin-access-btn"
-                      onClick={() => onOpenAuth('admin_access')}
-                      title="Acesso Administrativo"
-                      className="hidden xl:flex items-center gap-1 px-2.5 py-1.5 bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-bold transition-all"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>ADM</span>
-                    </button>
-                  )}
-                </div>
+                  </div>
+                </button>
               ) : (
                 <div className="flex items-center gap-1 sm:gap-1.5">
                   <button
@@ -443,15 +412,6 @@ export const Header: React.FC<HeaderProps> = ({
                     className="hidden sm:flex px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl border border-slate-700 transition-all touch-target items-center justify-center"
                   >
                     <span>Cadastrar</span>
-                  </button>
-                  <button
-                    id="header-admin-access-quick-btn"
-                    onClick={() => onOpenAuth('admin_access')}
-                    title="Portal de Acesso do Administrador"
-                    className="px-2.5 py-1.5 bg-slate-900/90 hover:bg-amber-400/20 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden sm:inline">Acesso</span> ADM
                   </button>
                 </div>
               )}
