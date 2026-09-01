@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ServiceRequest } from '../types';
+import { ServiceRequest, UserAccount } from '../types';
 import { 
   Clock, 
   CheckCircle2, 
@@ -15,26 +15,95 @@ import {
   ExternalLink,
   X,
   Camera,
-  Trash2
+  Trash2,
+  Lock,
+  UserPlus,
+  LogIn,
+  ShieldCheck
 } from 'lucide-react';
 
 interface OrderTrackingProps {
   requests: ServiceRequest[];
+  currentUser?: UserAccount | null;
   onApproveQuote: (id: string) => void;
   onOpenReviewModal: (req: ServiceRequest) => void;
   onNewRequestClick: () => void;
   onDeleteRequest?: (id: string) => void;
+  onOpenAuth?: (mode?: 'login' | 'register') => void;
 }
 
 export const OrderTracking: React.FC<OrderTrackingProps> = ({
   requests,
+  currentUser,
   onApproveQuote,
   onOpenReviewModal,
   onNewRequestClick,
-  onDeleteRequest
+  onDeleteRequest,
+  onOpenAuth
 }) => {
   const [previewZoomPhoto, setPreviewZoomPhoto] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // If user is not logged in, enforce privacy gate
+  if (!currentUser) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="bg-[#001838] text-white p-6 sm:p-8 rounded-3xl shadow-xl border border-amber-500/30 text-center max-w-xl mx-auto space-y-4">
+          <div className="w-16 h-16 bg-amber-400/20 text-amber-400 border border-amber-400/40 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+              Área Restrita & Individual
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-1">
+              Acompanhamento Seguro de Pedidos
+            </h2>
+          </div>
+
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+            Para garantir a privacidade e segurança dos seus dados, o histórico de solicitações, orçamentos recebidos e acompanhamento de execução só ficam visíveis para a sua conta.
+          </p>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => onOpenAuth?.('register')}
+              className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-400/25 flex items-center justify-center gap-2 uppercase tracking-wider transition-all transform hover:scale-[1.02]"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Criar Meu Cadastro</span>
+            </button>
+
+            <button
+              onClick={() => onOpenAuth?.('login')}
+              className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-colors"
+            >
+              <LogIn className="w-4 h-4 text-amber-400" />
+              <span>Já Tenho Conta • Entrar</span>
+            </button>
+          </div>
+
+          <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Dados 100% protegidos com criptografia</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Filter requests strictly for this user (or show all if admin)
+  const userRequests = currentUser.role === 'admin'
+    ? requests
+    : requests.filter(r => {
+        const cleanUserPhone = currentUser.phone?.replace(/\D/g, '') || '';
+        const cleanReqPhone = r.clientPhone?.replace(/\D/g, '') || '';
+        const emailMatch = r.clientEmail && currentUser.email && r.clientEmail.toLowerCase() === currentUser.email.toLowerCase();
+        const phoneMatch = cleanUserPhone && cleanReqPhone && (cleanUserPhone === cleanReqPhone || cleanReqPhone.includes(cleanUserPhone) || cleanUserPhone.includes(cleanReqPhone));
+        const nameMatch = r.clientName && currentUser.name && r.clientName.toLowerCase() === currentUser.name.toLowerCase();
+        return emailMatch || phoneMatch || nameMatch;
+      });
 
   const getStatusBadge = (status: ServiceRequest['status']) => {
     switch (status) {
@@ -112,19 +181,27 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
       </div>
 
       {/* Orders List */}
-      {requests.length === 0 ? (
+      {userRequests.length === 0 ? (
         <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center border border-slate-200 shadow-sm space-y-4">
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto">
             <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
           <h3 className="text-lg sm:text-xl font-black text-[#001838]">Você ainda não tem solicitações</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Escolha um dos nossos serviços acima e solicite um orçamento rápido e sem compromisso.
+            Escolha um dos nossos serviços e solicite um orçamento rápido e sem compromisso.
           </p>
+          <div className="pt-2">
+            <button
+              onClick={onNewRequestClick}
+              className="px-5 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow transition-all"
+            >
+              Fazer Primeira Solicitação
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {requests.map((req) => {
+          {userRequests.map((req) => {
             const requestPhotos = req.photos && req.photos.length > 0 
               ? req.photos 
               : req.photoUrl 

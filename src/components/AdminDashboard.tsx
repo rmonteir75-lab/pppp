@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ServiceRequest, 
   AdminMetrics, 
@@ -9,9 +9,11 @@ import {
   CommissionCharge,
   PaymentGatewaySettings,
   PaymentMethod,
-  PaymentStatus
+  PaymentStatus,
+  ServiceDefinition
 } from '../types';
-import { MONTHLY_CHART_DATA, SERVICE_DISTRIBUTION_DATA, INITIAL_COMMISSION_CHARGES, DEFAULT_PAYMENT_GATEWAY_SETTINGS } from '../data/mockData';
+import { DEFAULT_PAYMENT_GATEWAY_SETTINGS } from '../data/mockData';
+import { ServiceIcon } from './ServiceIcon';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -54,11 +56,18 @@ import {
   Scale,
   FileCheck2,
   CreditCard,
-  Ban
+  Ban,
+  RotateCcw,
+  Target,
+  Layers,
+  CalendarDays
 } from 'lucide-react';
 import { DigitalContractModal } from './DigitalContractModal';
 import { PaymentPlatformView } from './PaymentPlatformView';
 import { SMExpressLogo } from './SMExpressLogo';
+import { SalesFunnelCRM } from './SalesFunnelCRM';
+import { ServiceAgendaCalendar } from './ServiceAgendaCalendar';
+import { CompanyManagementPanel } from './CompanyManagementPanel';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -78,6 +87,7 @@ interface AdminDashboardProps {
   users?: UserAccount[];
   charges?: CommissionCharge[];
   gatewaySettings?: PaymentGatewaySettings;
+  services?: ServiceDefinition[];
   currentUser?: UserAccount | null;
   onOpenAuth?: (mode?: 'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access') => void;
   onSendQuote: (requestId: string, price: number, hours: string, prof: string, notes: string) => void;
@@ -91,6 +101,9 @@ interface AdminDashboardProps {
   onUpdateChargeStatus?: (chargeId: string, status: PaymentStatus, method?: PaymentMethod) => void;
   onIssueBoletoAndNfse?: (chargeId: string) => void;
   onSaveGatewaySettings?: (settings: PaymentGatewaySettings) => void;
+  onDeleteService?: (serviceId: string) => void;
+  onResetServices?: () => void;
+  onPurgeAllData?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -100,6 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   users = [],
   charges: initialCharges,
   gatewaySettings: initialGatewaySettings,
+  services = [],
   currentUser,
   onOpenAuth,
   onSendQuote,
@@ -112,9 +126,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteRequest,
   onUpdateChargeStatus,
   onIssueBoletoAndNfse,
-  onSaveGatewaySettings
+  onSaveGatewaySettings,
+  onDeleteService,
+  onResetServices,
+  onPurgeAllData
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'schedule' | 'reviews' | 'professionals' | 'users' | 'payments'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'funnel' | 'schedule' | 'company' | 'requests' | 'reviews' | 'professionals' | 'users' | 'payments' | 'services'>('overview');
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const [serviceToDelete, setServiceToDelete] = useState<ServiceDefinition | null>(null);
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
   
   // Commission & Payment State
   const [commissionCharges, setCommissionCharges] = useState<CommissionCharge[]>(() => {
@@ -137,6 +157,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setCurrentGatewaySettings(initialGatewaySettings);
     }
   }, [initialGatewaySettings]);
+
+  // Dynamic Chart Data from real requests
+  const monthlyChartData = useMemo(() => {
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const currentMonthIdx = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const result = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(currentYear, currentMonthIdx - i, 1);
+      const mIdx = d.getMonth();
+      const yr = d.getFullYear();
+      const mLabel = monthNames[mIdx];
+      const count = requests.filter(r => {
+        if (!r.createdAt) return false;
+        const rd = new Date(r.createdAt);
+        return rd.getMonth() === mIdx && rd.getFullYear() === yr;
+      }).length;
+      result.push({ period: mLabel, solicitacoes: count });
+    }
+    return result;
+  }, [requests]);
+
+  const serviceDistributionData = useMemo(() => {
+    if (requests.length === 0) return [];
+    const counts: Record<string, number> = {};
+    requests.forEach(r => {
+      const title = r.serviceTitle || 'Outros Serviços';
+      counts[title] = (counts[title] || 0) + 1;
+    });
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B'];
+    const total = requests.length;
+    return Object.entries(counts).map(([name, count], idx) => ({
+      name,
+      value: Math.round((count / total) * 100),
+      color: colors[idx % colors.length]
+    }));
+  }, [requests]);
 
   // Professional Management & Deletion State
   const [profSearchTerm, setProfSearchTerm] = useState('');
@@ -188,6 +245,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [formPassword, setFormPassword] = useState('');
   const [formPhoto3x4, setFormPhoto3x4] = useState<string>('');
   const formPhotoInputRef = React.useRef<HTMLInputElement>(null);
+  const [isFormCepLoading, setIsFormCepLoading] = useState(false);
+  const [formCepMessage, setFormCepMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const handleFormCepLookup = async (cepValue: string) => {
+    const cleanCep = cepValue.replace(/\D/g, '');
+    if (cleanCep.length === 8) {
+      setIsFormCepLoading(true);
+      setFormCepMessage(null);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          if (data.logradouro) setFormStreet(data.logradouro);
+          if (data.bairro) setFormNeighborhood(data.bairro);
+          if (data.localidade) setFormCity(data.localidade);
+          if (data.uf) setFormState(data.uf);
+          if (data.complemento && !formComplement) setFormComplement(data.complemento);
+          setFormCepMessage({
+            text: `Localizado: ${data.localidade}/${data.uf}`,
+            type: 'success'
+          });
+        } else {
+          setFormCepMessage({
+            text: 'CEP não encontrado.',
+            type: 'error'
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao consultar CEP:', err);
+        setFormCepMessage({
+          text: 'Falha ao buscar CEP.',
+          type: 'error'
+        });
+      } finally {
+        setIsFormCepLoading(false);
+      }
+    }
+  };
 
   const handleFormPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -293,12 +388,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     const isComplete = Boolean(formCpf && formPhone && formStreet && formCity);
     
-    const fallbackPhoto = formRole === 'profissional'
-      ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&h=400&q=80'
-      : formRole === 'admin'
-      ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&h=400&q=80'
-      : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80';
-
     const newUser: UserAccount = {
       id: formUserId,
       name: formName,
@@ -322,8 +411,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       totalRequests: 0,
       totalSpent: 0,
       createdAt: new Date().toISOString(),
-      avatarUrl: formPhoto3x4 || fallbackPhoto,
-      photo3x4Url: formPhoto3x4 || fallbackPhoto
+      avatarUrl: formPhoto3x4 || '',
+      photo3x4Url: formPhoto3x4 || ''
     };
 
     if (onAddUser) {
@@ -539,6 +628,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const proUsersCount = users.filter(u => u.role === 'profissional').length;
   const completeUsersCount = users.filter(u => u.isCompleteRegistration).length;
 
+  // Strict Admin Gate: Prevent non-admin/unauthenticated users from seeing internal data
+  if (!currentUser || currentUser.role !== 'admin') {
+    return (
+      <div className="space-y-6 animate-fade-in py-6">
+        <div className="bg-[#001838] text-white p-6 sm:p-10 rounded-3xl shadow-2xl border border-amber-500/30 text-center max-w-xl mx-auto space-y-5">
+          <div className="w-20 h-20 bg-amber-400/15 text-amber-400 border border-amber-400/40 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+            <ShieldCheck className="w-10 h-10" />
+          </div>
+
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+              Área Restrita do Administrador
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-2">
+              Painel de Gestão & Operações
+            </h2>
+          </div>
+
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+            Este painel contém métricas financeiras, emissão de orçamentos, contratos de prestadores e gestão de usuários. O acesso é exclusivo para administradores autenticados da SM Express.
+          </p>
+
+          <div className="pt-3">
+            <button
+              onClick={() => onOpenAuth('admin_access')}
+              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-xl shadow-amber-400/30 flex items-center justify-center gap-2 uppercase tracking-wider transition-all transform hover:scale-[1.02] mx-auto touch-target"
+            >
+              <ShieldCheck className="w-5 h-5 text-slate-950" />
+              <span>Autenticar como Administrador</span>
+            </button>
+          </div>
+
+          <div className="pt-2 text-[11px] text-slate-400">
+            Acesso protegido por autenticação segura com chave mestra e criptografia de ponta a ponta.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       
@@ -553,6 +682,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             Resumo & Métricas
+          </button>
+
+          <button
+            onClick={() => setActiveTab('funnel')}
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
+              activeTab === 'funnel' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Funil de Vendas</span>
+            <span className="bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
+              {requests.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('schedule')}
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
+              activeTab === 'schedule' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Agenda & Escala</span>
+            {scheduledRequests.length > 0 && (
+              <span className="bg-blue-500/30 text-blue-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
+                {scheduledRequests.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('company')}
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
+              activeTab === 'company' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Target className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Gestão & Metas</span>
           </button>
           
           <button
@@ -580,24 +747,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {pendingRequests.length}
               </span>
             )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('schedule')}
-            className={`px-3 py-2 rounded-lg transition-all whitespace-nowrap touch-target flex items-center justify-center ${
-              activeTab === 'schedule' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            Agendamentos
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reviews')}
-            className={`px-3 py-2 rounded-lg transition-all whitespace-nowrap touch-target flex items-center justify-center ${
-              activeTab === 'reviews' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            Avaliações
           </button>
 
           <button
@@ -629,6 +778,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => setActiveTab('services')}
+            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
+              activeTab === 'services' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Serviços</span>
+            <span className="bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
+              {services.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reviews')}
+            className={`px-3 py-2 rounded-lg transition-all whitespace-nowrap touch-target flex items-center justify-center ${
+              activeTab === 'reviews' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            Avaliações
+          </button>
         </div>
       </div>
 
@@ -651,14 +822,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </p>
             </div>
           </div>
-          {onOpenAuth && (
-            <button
-              onClick={() => onOpenAuth('profile')}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl border border-amber-400/30 transition-colors self-end sm:self-auto"
-            >
-              Configurar Perfil ADM
-            </button>
-          )}
+          {/* Action buttons */}
+          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+            {onPurgeAllData && (
+              <button
+                type="button"
+                onClick={() => setIsPurgeModalOpen(true)}
+                className="px-3.5 py-1.5 bg-red-600/90 hover:bg-red-700 text-white text-xs font-bold rounded-xl border border-red-500 transition-colors flex items-center gap-1.5 shadow-sm"
+                title="Limpar todos os cadastros, orçamentos e registros do sistema"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Zerar Base (0 Registros)</span>
+              </button>
+            )}
+
+            {onOpenAuth && (
+              <button
+                onClick={() => onOpenAuth('profile')}
+                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl border border-amber-400/30 transition-colors"
+              >
+                Configurar Perfil ADM
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 text-white border border-amber-400/50 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg animate-fade-in">
@@ -944,11 +1130,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     >
                       {/* User Info Col */}
                       <div className="flex items-start sm:items-center gap-3.5">
-                        <img
-                          src={u.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80"}
-                          alt={u.name}
-                          className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm flex-shrink-0"
-                        />
+                        {(u.photo3x4Url || u.avatarUrl) ? (
+                          <img
+                            src={u.photo3x4Url || u.avatarUrl}
+                            alt={u.name}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-slate-900 text-amber-400 font-extrabold text-sm flex items-center justify-center border border-slate-700 shadow-sm flex-shrink-0">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-extrabold text-slate-900 text-sm">{u.name}</span>
@@ -1255,7 +1447,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="h-64 w-full pt-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={MONTHLY_CHART_DATA}>
+                  <AreaChart data={monthlyChartData}>
                     <defs>
                       <linearGradient id="colorSolicitacoes" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
@@ -1263,7 +1455,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="period" stroke="#64748b" fontSize={12} />
-                    <YAxis stroke="#64748b" fontSize={12} />
+                    <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
                     <Tooltip 
                       contentStyle={{ backgroundColor: '#001838', color: '#fff', borderRadius: '12px', border: 'none' }}
                     />
@@ -1280,36 +1472,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs text-slate-500">Distribuição percentual de demanda por categoria</p>
               </div>
 
-              <div className="h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={SERVICE_DISTRIBUTION_DATA}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={75}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {SERVICE_DISTRIBUTION_DATA.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Legend */}
-              <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600">
-                {SERVICE_DISTRIBUTION_DATA.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                    <span className="truncate">{item.name} ({item.value}%)</span>
+              {serviceDistributionData.length > 0 ? (
+                <>
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={serviceDistributionData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={75}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {serviceDistributionData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                ))}
-              </div>
+
+                  {/* Legend */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600">
+                    {serviceDistributionData.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="truncate">{item.name} ({item.value}%)</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="h-48 flex flex-col items-center justify-center text-center p-4 text-slate-400 space-y-2">
+                  <BarChart3 className="w-8 h-8 text-slate-300" />
+                  <p className="text-xs">Aguardando solicitações para calcular a distribuição em tempo real.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1428,51 +1629,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: AGENDAMENTOS EM EXECUÇÃO / CONCLUÍDOS */}
+      {/* TAB: FUNIL DE VENDAS & CRM */}
+      {/* ========================================================================= */}
+      {activeTab === 'funnel' && (
+        <SalesFunnelCRM
+          requests={requests}
+          professionals={professionals}
+          onUpdateStatus={onUpdateStatus}
+          onOpenQuoteForm={handleOpenQuoteForm}
+          onDeleteRequest={onDeleteRequest}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: AGENDA GERAL DE SERVIÇOS & ESCALA */}
       {/* ========================================================================= */}
       {activeTab === 'schedule' && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-[#001838]">Serviços Aprovados e Agendados</h3>
-          <div className="space-y-3">
-            {scheduledRequests.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border text-center text-slate-400">
-                Nenhum serviço em andamento no momento.
-              </div>
-            ) : (
-              scheduledRequests.map((req) => (
-                <div key={req.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900">{req.serviceTitle}</span>
-                      <span className="text-xs text-slate-400">({req.id})</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        req.status === 'concluido' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {req.status === 'concluido' ? 'Concluído' : 'Aprovado / Em Execução'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-3">
-                      <span>Cliente: <strong>{req.clientName}</strong></span>
-                      <span>Valor: <strong>R$ {req.quotedPrice?.toFixed(2)}</strong></span>
-                      <span>Profissional: <strong>{req.assignedProfessional}</strong></span>
-                    </div>
-                  </div>
+        <ServiceAgendaCalendar
+          requests={requests}
+          professionals={professionals}
+          services={services}
+          onUpdateStatus={onUpdateStatus}
+          onOpenQuoteForm={handleOpenQuoteForm}
+        />
+      )}
 
-                  <div className="flex items-center gap-2">
-                    {req.status !== 'concluido' && (
-                      <button
-                        onClick={() => onUpdateStatus(req.id, 'concluido')}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors"
-                      >
-                        Marcar como Concluído
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      {/* ========================================================================= */}
+      {/* TAB: GESTÃO DA EMPRESA & METAS */}
+      {/* ========================================================================= */}
+      {activeTab === 'company' && (
+        <CompanyManagementPanel
+          requests={requests}
+          professionals={professionals}
+          users={users}
+          charges={commissionCharges}
+          services={services}
+        />
       )}
 
       {/* ========================================================================= */}
@@ -1481,25 +1673,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeTab === 'reviews' && (
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-[#001838]">Avaliações Recebidas de Clientes</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {ratedRequests.map((req) => (
-              <div key={req.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-sm">{req.serviceTitle}</span>
-                  <div className="flex items-center text-amber-400">
-                    {[...Array(req.rating?.stars || 5)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-amber-400" />
-                    ))}
+          {ratedRequests.length === 0 ? (
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto">
+                <Star className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-slate-800">Nenhuma avaliação recebida ainda</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                As avaliações e depoimentos de clientes aparecerão aqui assim que os serviços concluídos forem avaliados.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ratedRequests.map((req) => (
+                <div key={req.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 text-sm">{req.serviceTitle}</span>
+                    <div className="flex items-center text-amber-400">
+                      {[...Array(req.rating?.stars || 5)].map((_, i) => (
+                        <Star key={i} className="w-4 h-4 fill-amber-400" />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-600 italic">"{req.rating?.comment}"</p>
+                  <div className="text-[10px] text-slate-400 flex justify-between border-t pt-2">
+                    <span>Por {req.clientName}</span>
+                    <span>Profissional: {req.assignedProfessional}</span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-600 italic">"{req.rating?.comment}"</p>
-                <div className="text-[10px] text-slate-400 flex justify-between border-t pt-2">
-                  <span>Por {req.clientName}</span>
-                  <span>Profissional: {req.assignedProfessional}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1564,12 +1768,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-16 rounded-xl overflow-hidden border-2 border-amber-400 flex-shrink-0 bg-slate-900 shadow-sm">
-                          <img
-                            src={prof.photo3x4Url || prof.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&h=400&q=80'}
-                            alt={prof.fullName}
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="relative w-12 h-16 rounded-xl overflow-hidden border-2 border-amber-400 flex-shrink-0 bg-slate-900 shadow-sm flex items-center justify-center">
+                          {(prof.photo3x4Url || prof.photoUrl) ? (
+                            <img
+                              src={prof.photo3x4Url || prof.photoUrl}
+                              alt={prof.fullName}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-amber-400">
+                              <User className="w-6 h-6 opacity-80" />
+                              <span className="text-[9px] font-bold text-slate-300">
+                                {prof.fullName.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
                           <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[7px] font-mono text-amber-400 text-center font-bold">
                             ID 3/4
                           </span>
@@ -1792,6 +2005,154 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* TAB 8: CATÁLOGO DE SERVIÇOS (GESTÃO & EXCLUSÃO DE SERVIÇOS) */}
+      {/* ========================================================================= */}
+      {activeTab === 'services' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header toolbar */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-black text-slate-900">Catálogo de Serviços Disponíveis</h3>
+                <span className="bg-amber-100 text-amber-900 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-300">
+                  {services.length} Serviços Ativos
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Gerencie, visualize e exclua serviços oferecidos no aplicativo SM Express.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {onResetServices && (
+                <button
+                  type="button"
+                  onClick={onResetServices}
+                  className="px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                  title="Restaurar lista original de serviços"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Restaurar Catálogo</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={serviceSearchTerm}
+              onChange={(e) => setServiceSearchTerm(e.target.value)}
+              placeholder="Buscar serviço por nome, especialidade ou descrição..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 shadow-sm focus:outline-none focus:border-amber-400"
+            />
+          </div>
+
+          {/* Services Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {services
+              .filter(s => 
+                s.title.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
+                s.shortDescription.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
+                s.fullDescription.toLowerCase().includes(serviceSearchTerm.toLowerCase())
+              )
+              .map((service) => (
+                <div
+                  key={service.id}
+                  className="bg-white rounded-2xl p-4 border border-slate-200 hover:border-amber-400/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-2.5 rounded-xl text-white shadow-sm ${service.color} flex-shrink-0`}>
+                          <ServiceIcon name={service.iconName} className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
+                            {service.title}
+                          </h4>
+                          <span className="text-[10px] font-mono text-slate-400 uppercase">
+                            ID: {service.id}
+                          </span>
+                        </div>
+                      </div>
+
+                      {onDeleteService && (
+                        <button
+                          type="button"
+                          onClick={() => setServiceToDelete(service)}
+                          className="w-8 h-8 rounded-xl bg-red-50 hover:bg-red-600 text-red-500 hover:text-white flex items-center justify-center transition-colors shadow-sm flex-shrink-0"
+                          title="Excluir este serviço"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
+                      {service.shortDescription}
+                    </p>
+
+                    {service.fields && service.fields.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Campos do Orçamento ({service.fields.length}):
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {service.fields.map((f, i) => (
+                            <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium">
+                              {f.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
+                      <CheckCircle className="w-3.5 h-3.5" /> Ativo no Catálogo
+                    </span>
+                    {onDeleteService && (
+                      <button
+                        type="button"
+                        onClick={() => setServiceToDelete(service)}
+                        className="text-red-600 hover:text-red-800 font-bold hover:underline"
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          {services.length === 0 && (
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+                <Briefcase className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-slate-800">Nenhum serviço cadastrado</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Todos os serviços foram removidos. Clique no botão abaixo para restaurar o catálogo padrão.
+              </p>
+              {onResetServices && (
+                <button
+                  type="button"
+                  onClick={onResetServices}
+                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-colors"
+                >
+                  Restaurar Catálogo Padrão
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL 1: EMITIR ORÇAMENTO */}
       {/* ========================================================================= */}
       {selectedReqForQuote && (
@@ -1912,12 +2273,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             
             <div className="flex items-center justify-between border-b pb-4">
               <div className="flex items-center gap-3">
-                <div className="relative w-14 h-18 rounded-xl overflow-hidden border-2 border-amber-400 shadow-sm bg-slate-900 flex-shrink-0">
-                  <img
-                    src={selectedUserForView.photo3x4Url || selectedUserForView.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80"}
-                    alt={selectedUserForView.name}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="relative w-14 h-18 rounded-xl overflow-hidden border-2 border-amber-400 shadow-sm bg-slate-900 flex-shrink-0 flex items-center justify-center">
+                  {(selectedUserForView.photo3x4Url || selectedUserForView.avatarUrl) ? (
+                    <img
+                      src={selectedUserForView.photo3x4Url || selectedUserForView.avatarUrl}
+                      alt={selectedUserForView.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-amber-400">
+                      <User className="w-7 h-7 opacity-80" />
+                      <span className="text-[10px] font-bold text-slate-300">
+                        {selectedUserForView.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
                   <span className="absolute bottom-0 inset-x-0 bg-slate-950/90 text-[7px] font-mono text-amber-400 text-center font-bold">
                     ID 3/4
                   </span>
@@ -2210,7 +2580,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     required
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="email@exemplo.com"
+                    placeholder="contato@cliente.com.br"
                     className="w-full p-2 bg-white border border-slate-300 rounded-xl"
                   />
                 </div>
@@ -2224,7 +2594,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     required
                     value={formPhone}
                     onChange={(e) => setFormPhone(formatPhone(e.target.value))}
-                    placeholder="(12) 99999-0000"
+                    placeholder="(12) 9XXXX-XXXX"
                     className="w-full p-2 bg-white border border-slate-300 rounded-xl"
                   />
                 </div>
@@ -2265,21 +2635,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Endereço Completo */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
-                <div className="flex items-center gap-1 text-slate-800 font-bold text-xs">
-                  <MapPin className="w-4 h-4 text-amber-600" />
-                  <span>Endereço Completo</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-slate-800 font-bold text-xs">
+                    <MapPin className="w-4 h-4 text-amber-600" />
+                    <span>Endereço Completo</span>
+                  </div>
+                  {isFormCepLoading && (
+                    <span className="text-[10px] font-bold text-amber-600 animate-pulse flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                      Consultando CEP...
+                    </span>
+                  )}
+                  {formCepMessage && !isFormCepLoading && (
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        formCepMessage.type === 'success'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {formCepMessage.text}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-[10px] text-slate-500 mb-1">CEP</label>
-                    <input
-                      type="text"
-                      value={formCep}
-                      onChange={(e) => setFormCep(formatCEP(e.target.value))}
-                      placeholder="12000-000"
-                      className="w-full p-2 bg-white border border-slate-300 rounded-xl"
-                    />
+                    <label className="block text-[10px] text-slate-500 mb-1">
+                      CEP (Preenchimento Automático)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={formCep}
+                        onChange={(e) => {
+                          const formatted = formatCEP(e.target.value);
+                          setFormCep(formatted);
+                          const digits = formatted.replace(/\D/g, '');
+                          if (digits.length === 8) {
+                            handleFormCepLookup(digits);
+                          } else if (formCepMessage) {
+                            setFormCepMessage(null);
+                          }
+                        }}
+                        onBlur={() => handleFormCepLookup(formCep)}
+                        placeholder="12000-000"
+                        maxLength={9}
+                        className="w-full p-2 bg-white border border-slate-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl transition-all"
+                      />
+                    </div>
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-[10px] text-slate-500 mb-1">Rua / Logradouro *</label>
@@ -2289,7 +2693,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={formStreet}
                       onChange={(e) => setFormStreet(e.target.value)}
                       placeholder="Ex: Rua das Palmeiras"
-                      className="w-full p-2 bg-white border border-slate-300 rounded-xl"
+                      className="w-full p-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl"
                     />
                   </div>
                 </div>
@@ -2303,7 +2707,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={formNumber}
                       onChange={(e) => setFormNumber(e.target.value)}
                       placeholder="123"
-                      className="w-full p-2 bg-white border border-slate-300 rounded-xl"
+                      className="w-full p-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl"
                     />
                   </div>
 
@@ -2314,7 +2718,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={formComplement}
                       onChange={(e) => setFormComplement(e.target.value)}
                       placeholder="Apto / Casa"
-                      className="w-full p-2 bg-white border border-slate-300 rounded-xl"
+                      className="w-full p-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl"
                     />
                   </div>
 
@@ -2325,18 +2729,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={formNeighborhood}
                       onChange={(e) => setFormNeighborhood(e.target.value)}
                       placeholder="Bairro"
-                      className="w-full p-2 bg-white border border-slate-300 rounded-xl"
+                      className="w-full p-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-slate-500 mb-1">Cidade/UF</label>
-                    <input
-                      type="text"
-                      value={`${formCity} - ${formState}`}
-                      onChange={(e) => setFormCity(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-300 rounded-xl"
-                    />
+                    <label className="block text-[10px] text-slate-500 mb-1">Cidade - UF</label>
+                    <div className="grid grid-cols-3 gap-1">
+                      <input
+                        type="text"
+                        value={formCity}
+                        onChange={(e) => setFormCity(e.target.value)}
+                        placeholder="Cidade"
+                        className="col-span-2 p-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={formState}
+                        maxLength={2}
+                        onChange={(e) => setFormState(e.target.value.toUpperCase())}
+                        placeholder="UF"
+                        className="col-span-1 p-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs uppercase text-center"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2439,11 +2854,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <h3 className="font-extrabold text-lg text-slate-900">Excluir Cadastro do Profissional?</h3>
               <div className="p-3 bg-red-50 rounded-2xl border border-red-100 text-xs text-left space-y-1">
                 <div className="flex items-center gap-2">
-                  <img
-                    src={profToDelete.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
-                    alt={profToDelete.fullName}
-                    className="w-8 h-8 rounded-lg object-cover border"
-                  />
+                  {(profToDelete.photo3x4Url || profToDelete.photoUrl) ? (
+                    <img
+                      src={profToDelete.photo3x4Url || profToDelete.photoUrl}
+                      alt={profToDelete.fullName}
+                      className="w-8 h-8 rounded-lg object-cover border"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-amber-400 font-bold text-xs flex items-center justify-center border">
+                      {profToDelete.fullName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <strong className="font-bold text-slate-900 block">{profToDelete.fullName}</strong>
                     <span className="text-[11px] text-slate-500 font-mono">CPF: {profToDelete.cpfCnpj}</span>
@@ -2476,6 +2897,116 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Sim, Excluir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: CONFIRMAR EXCLUSÃO DE SERVIÇO */}
+      {/* ========================================================================= */}
+      {serviceToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-red-200 shadow-2xl space-y-4 text-slate-800">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="font-extrabold text-lg text-slate-900">Excluir Serviço do Catálogo?</h3>
+              <div className="p-3 bg-red-50 rounded-2xl border border-red-100 text-xs text-left space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-lg text-white ${serviceToDelete.color}`}>
+                    <ServiceIcon name={serviceToDelete.iconName} className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="font-bold text-slate-900 block">{serviceToDelete.title}</strong>
+                    <span className="text-[11px] text-slate-500 font-mono">ID: {serviceToDelete.id}</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-600 pt-1 border-t border-red-200/60">
+                  <span className="block text-red-700 font-semibold mt-0.5">
+                    Aviso: Este serviço será removido da tela inicial e os clientes não poderão solicitar orçamentos para ele.
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Tem certeza que deseja prosseguir com a exclusão?
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setServiceToDelete(null)}
+                className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteService && serviceToDelete) {
+                    onDeleteService(serviceToDelete.id);
+                    setServiceToDelete(null);
+                  }
+                }}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sim, Excluir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PURGE ALL DATA (ZERAR BASE DE DADOS) */}
+      {isPurgeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-red-200 shadow-2xl space-y-4 text-slate-800">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
+              <AlertTriangle className="w-7 h-7 text-red-600" />
+            </div>
+            
+            <div className="text-center space-y-2">
+              <h3 className="font-extrabold text-lg text-slate-900">Zerar Toda a Base de Dados?</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Esta ação limpará <strong>todas as informações de cadastros</strong>, solicitações de serviços, orçamentos, agendamentos, comissões e histórico, deixando o sistema 100% limpo com zero registros (mantendo apenas o acesso mestre do Administrador).
+              </p>
+              <div className="p-3 bg-red-50 rounded-2xl border border-red-100 text-[11px] text-red-700 text-left space-y-1">
+                <span className="font-bold block">Resumo do que será zerado:</span>
+                <ul className="list-disc list-inside space-y-0.5 text-slate-600">
+                  <li>0 solicitações de orçamento e pedidos</li>
+                  <li>0 agendamentos e atendimentos</li>
+                  <li>0 profissionais credenciados</li>
+                  <li>0 faturamento e cobranças de comissão</li>
+                  <li>Reset completo de armazenamento local</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsPurgeModalOpen(false)}
+                className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onPurgeAllData) {
+                    onPurgeAllData();
+                  }
+                  setIsPurgeModalOpen(false);
+                }}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sim, Limpar Tudo</span>
               </button>
             </div>
           </div>

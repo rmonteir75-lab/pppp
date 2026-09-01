@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { 
   ServiceDefinition, 
   ServiceRequest, 
@@ -29,6 +30,7 @@ import { PhoneContainer } from './components/PhoneContainer';
 import { ProfessionalRegistration } from './components/ProfessionalRegistration';
 import { AuthModal } from './components/AuthModal';
 import { SupabaseSyncModal } from './components/SupabaseSyncModal';
+import { Toast, ToastType } from './components/Toast';
 import { supabaseService } from './services/supabaseService';
 import { isSupabaseConfigured } from './lib/supabase';
 
@@ -38,7 +40,18 @@ export default function App() {
   const [phoneFrameMode, setPhoneFrameMode] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
 
-  // Users & Auth State
+  // Visual Toast Feedback System
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const showToast = (message: string, type: ToastType = 'success') => {
+    setToast({ message, type });
+  };
+
+  // Draft Request & Mandatory Registration state
+  const [pendingRequestDraft, setPendingRequestDraft] = useState<Partial<ServiceRequest> | null>(null);
+  const [forceRegisterInAuth, setForceRegisterInAuth] = useState(false);
+  const [authRequiredNotice, setAuthRequiredNotice] = useState<string>('');
+
+  // Users & Auth State (Clean State initialized only with Master Admin)
   const [users, setUsers] = useState<UserAccount[]>(() => {
     const saved = localStorage.getItem('smexpress_users');
     if (saved) {
@@ -82,20 +95,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access'>('login');
 
-  // Save users and current user to localStorage
-  useEffect(() => {
-    localStorage.setItem('smexpress_users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('smexpress_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('smexpress_current_user');
-    }
-  }, [currentUser]);
-
-  // App Data State (Clean Production State)
+  // App Data State (Clean Production Zero State)
   const [requests, setRequests] = useState<ServiceRequest[]>(() => {
     const saved = localStorage.getItem('smexpress_requests');
     if (saved) {
@@ -164,6 +164,38 @@ export default function App() {
     return [];
   });
 
+  // Automated clean slate on boot
+  useEffect(() => {
+    const purgeKey = 'smexpress_clean_slate_v3';
+    if (!localStorage.getItem(purgeKey)) {
+      localStorage.setItem(purgeKey, 'true');
+      localStorage.removeItem('smexpress_requests');
+      localStorage.removeItem('smexpress_professionals');
+      localStorage.removeItem('smexpress_commissions');
+      localStorage.removeItem('smexpress_goal_revenue');
+      localStorage.removeItem('smexpress_goal_services');
+      localStorage.removeItem('smexpress_goal_profs');
+      localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
+      setRequests([]);
+      setProfessionals([]);
+      setCommissionCharges([]);
+      setUsers(INITIAL_USERS);
+    }
+  }, []);
+
+  // Save users and current user to localStorage
+  useEffect(() => {
+    localStorage.setItem('smexpress_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('smexpress_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('smexpress_current_user');
+    }
+  }, [currentUser]);
+
   const [gatewaySettings, setGatewaySettings] = useState<PaymentGatewaySettings>(() => {
     const saved = localStorage.getItem('smexpress_gateway_settings');
     if (saved) {
@@ -181,7 +213,24 @@ export default function App() {
     return DEFAULT_PAYMENT_GATEWAY_SETTINGS;
   });
 
-  // Save requests, professionals, commissions and gatewaySettings to localStorage
+  const [services, setServices] = useState<ServiceDefinition[]>(() => {
+    const saved = localStorage.getItem('smexpress_services');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((s: ServiceDefinition) => s.id !== 'manutencao_residencial');
+        }
+      } catch {}
+    }
+    return SERVICES_LIST;
+  });
+
+  // Save requests, professionals, commissions, gatewaySettings and services to localStorage
+  useEffect(() => {
+    localStorage.setItem('smexpress_services', JSON.stringify(services));
+  }, [services]);
+
   useEffect(() => {
     localStorage.setItem('smexpress_requests', JSON.stringify(requests));
   }, [requests]);
@@ -233,9 +282,38 @@ export default function App() {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
   const [selectedRequestForReview, setSelectedRequestForReview] = useState<ServiceRequest | null>(null);
 
+  // Enforce strict view authorization based on user role
+  const handleViewChange = (requestedView: 'client' | 'admin' | 'professional') => {
+    if (!currentUser) {
+      setCurrentView('client');
+      return;
+    }
+    if (currentUser.role === 'admin') {
+      setCurrentView('admin');
+    } else if (currentUser.role === 'profissional') {
+      setCurrentView('professional');
+    } else {
+      setCurrentView('client');
+    }
+  };
+
+  // Sync currentView whenever user logs in, logs out, or switches role
+  useEffect(() => {
+    if (!currentUser) {
+      if (currentView !== 'client') setCurrentView('client');
+    } else if (currentUser.role === 'admin') {
+      if (currentView !== 'admin') setCurrentView('admin');
+    } else if (currentUser.role === 'profissional') {
+      if (currentView !== 'professional') setCurrentView('professional');
+    } else {
+      if (currentView !== 'client') setCurrentView('client');
+    }
+  }, [currentUser]);
+
   // Auth Handlers
   const handleLogin = (user: UserAccount) => {
     setCurrentUser(user);
+    showToast(`Bem-vindo de volta, ${user.name}!`, 'success');
     if (user.role === 'admin') {
       setCurrentView('admin');
     } else if (user.role === 'profissional') {
@@ -247,7 +325,59 @@ export default function App() {
 
   const handleRegisterUser = (newUser: UserAccount) => {
     setUsers(prev => [newUser, ...prev]);
+    setCurrentUser(newUser);
     supabaseService.upsertUser(newUser).catch(() => {});
+    showToast(`Cadastro realizado com sucesso! Bem-vindo, ${newUser.name}.`, 'success');
+
+    // If there was a pending service request draft that forced registration, complete and submit it!
+    if (pendingRequestDraft) {
+      const fullAddress = pendingRequestDraft.street || `${newUser.street || ''}, ${newUser.number || 'S/N'} - ${newUser.neighborhood || ''}, ${newUser.city || 'Taubaté'}`;
+      const addressParts = fullAddress.split(',');
+      const mainStreet = addressParts[0]?.trim() || fullAddress;
+      const rest = addressParts.slice(1).join(',').trim() || `${newUser.neighborhood || 'Centro'}, ${newUser.city || 'Taubaté'}`;
+
+      const fullMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress + ', Brasil')}`;
+
+      const completedReq: ServiceRequest = {
+        id: `REQ-${Math.floor(1000 + Math.random() * 9000)}`,
+        serviceId: (pendingRequestDraft.serviceId as any) || 'outros_servicos',
+        serviceTitle: pendingRequestDraft.serviceTitle || 'Serviço Geral',
+        clientName: newUser.name,
+        clientPhone: newUser.phone,
+        clientEmail: newUser.email,
+        details: pendingRequestDraft.details || { 'Descrição do Pedido': 'Solicitação concluída após cadastro' },
+        frequency: 'Avulso',
+        desiredDate: pendingRequestDraft.desiredDate || new Date().toISOString().split('T')[0],
+        street: mainStreet,
+        number: newUser.number || 'S/N',
+        neighborhood: rest,
+        city: newUser.city || 'Taubaté',
+        state: newUser.state || 'SP',
+        photoUrl: pendingRequestDraft.photos?.[0] || undefined,
+        photos: pendingRequestDraft.photos || [],
+        googleMapsUrl: fullMapsUrl,
+        status: 'pendente_orcamento',
+        createdAt: new Date().toISOString()
+      };
+
+      setRequests(prev => [completedReq, ...prev]);
+      setClientTab('pedidos');
+      supabaseService.upsertServiceRequest(completedReq).catch(() => {});
+      setPendingRequestDraft(null);
+      showToast(`Pedido de orçamento ${completedReq.id} enviado com sucesso!`, 'success');
+    }
+
+    setForceRegisterInAuth(false);
+    setAuthRequiredNotice('');
+  };
+
+  const handleRequireRegisterFromRequest = (draft: Partial<ServiceRequest>) => {
+    setPendingRequestDraft(draft);
+    setForceRegisterInAuth(true);
+    setAuthRequiredNotice('Preencha seu cadastro para concluir e enviar o seu pedido de orçamento');
+    setAuthModalInitialMode('register');
+    setIsAuthModalOpen(true);
+    showToast('Cadastro obrigatório para finalizar seu pedido', 'info');
   };
 
   const handleUpdateUser = (updatedUser: UserAccount) => {
@@ -256,6 +386,7 @@ export default function App() {
       setCurrentUser(updatedUser);
     }
     supabaseService.upsertUser(updatedUser).catch(() => {});
+    showToast('Dados cadastrais atualizados com sucesso!', 'success');
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -264,24 +395,56 @@ export default function App() {
       setCurrentUser(null);
     }
     supabaseService.deleteUser(userId).catch(() => {});
+    showToast('Usuário excluído com sucesso.', 'info');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setCurrentView('client');
+    setClientTab('solicitar');
+    showToast('Você saiu da sua conta.', 'info');
   };
 
   const handleOpenAuth = (mode: 'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access' = 'login') => {
+    setForceRegisterInAuth(false);
+    setAuthRequiredNotice('');
     setAuthModalInitialMode(mode);
     setIsAuthModalOpen(true);
   };
 
   // Handlers
+  const handlePurgeAllData = () => {
+    setUsers(INITIAL_USERS);
+    setRequests([]);
+    setProfessionals([]);
+    setCommissionCharges([]);
+    localStorage.removeItem('smexpress_requests');
+    localStorage.removeItem('smexpress_professionals');
+    localStorage.removeItem('smexpress_commissions');
+    localStorage.removeItem('smexpress_goal_revenue');
+    localStorage.removeItem('smexpress_goal_services');
+    localStorage.removeItem('smexpress_goal_profs');
+    localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
+    showToast('Toda a base de dados, cadastros, solicitações e agendamentos foram completamente zerados.', 'info');
+  };
+
+  const handleDeleteService = (serviceId: string) => {
+    const target = services.find(s => s.id === serviceId);
+    setServices(prev => prev.filter(s => s.id !== serviceId));
+    showToast(`Serviço "${target?.title || serviceId}" excluído com sucesso.`, 'info');
+  };
+
+  const handleResetServices = () => {
+    setServices(SERVICES_LIST);
+    showToast('Catálogo de serviços restaurado com sucesso.', 'success');
+  };
+
   const handleOpenRequestModal = (service: ServiceDefinition | null, initialText?: string, categoryId?: string) => {
     if (categoryId) {
-      const found = SERVICES_LIST.find(s => s.id === categoryId);
-      setSelectedServiceForModal(found || SERVICES_LIST[0]);
+      const found = services.find(s => s.id === categoryId);
+      setSelectedServiceForModal(found || services[0]);
     } else {
-      setSelectedServiceForModal(service || SERVICES_LIST[0]);
+      setSelectedServiceForModal(service || services[0]);
     }
     setRequestInitialDescription(initialText || '');
     setIsRequestModalOpen(true);
@@ -381,6 +544,7 @@ export default function App() {
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 3);
       const chargeId = `COM-${targetReq.id.replace(/\D/g, '') || Math.floor(1000 + Math.random() * 9000)}`;
+      const formattedAddress = [targetReq.street, targetReq.number, targetReq.neighborhood, targetReq.city, targetReq.state].filter(Boolean).join(', ');
 
       setCommissionCharges(prev => {
         if (prev.some(c => c.requestId === targetReq.id)) return prev;
@@ -390,11 +554,11 @@ export default function App() {
           serviceTitle: targetReq.serviceTitle,
           professionalId: prof?.id || 'PRO-DIR',
           professionalName: targetReq.assignedProfessional,
-          professionalCpfCnpj: prof?.cpfCnpj || '000.000.000-00',
-          professionalPhone: prof?.phone || '(12) 99999-9999',
+          professionalCpfCnpj: prof?.cpfCnpj || '',
+          professionalPhone: prof?.phone || '(12) 99255-5104',
           clientName: targetReq.clientName,
-          clientPhone: targetReq.phone || '(12) 99999-9999',
-          clientAddress: targetReq.address || '',
+          clientPhone: targetReq.clientPhone || '',
+          clientAddress: formattedAddress || '',
           serviceValue: targetReq.quotedPrice || 0,
           commissionPercent: 30,
           commissionValue: commissionVal,
@@ -430,6 +594,7 @@ export default function App() {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 3);
         const chargeId = `COM-${targetReq.id.replace(/\D/g, '') || Math.floor(1000 + Math.random() * 9000)}`;
+        const formattedAddress = [targetReq.street, targetReq.number, targetReq.neighborhood, targetReq.city, targetReq.state].filter(Boolean).join(', ');
 
         setCommissionCharges(prev => {
           if (prev.some(c => c.requestId === targetReq.id)) return prev;
@@ -439,11 +604,11 @@ export default function App() {
             serviceTitle: targetReq.serviceTitle,
             professionalId: prof?.id || 'PRO-DIR',
             professionalName: targetReq.assignedProfessional,
-            professionalCpfCnpj: prof?.cpfCnpj || '000.000.000-00',
-            professionalPhone: prof?.phone || '(12) 99999-9999',
+            professionalCpfCnpj: prof?.cpfCnpj || '',
+            professionalPhone: prof?.phone || '(12) 99255-5104',
             clientName: targetReq.clientName,
-            clientPhone: targetReq.phone || '(12) 99999-9999',
-            clientAddress: targetReq.address || '',
+            clientPhone: targetReq.clientPhone || '',
+            clientAddress: formattedAddress || '',
             serviceValue: targetReq.quotedPrice || 0,
             commissionPercent: 30,
             commissionValue: commissionVal,
@@ -557,7 +722,7 @@ export default function App() {
       {/* Top Main Navigation Header */}
       <Header
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleViewChange}
         phoneFrameMode={phoneFrameMode}
         onTogglePhoneFrame={() => setPhoneFrameMode(!phoneFrameMode)}
         pendingQuotesCount={pendingQuotesCount}
@@ -620,14 +785,7 @@ export default function App() {
                   <BannerSection 
                     onRequestClick={(initialText, categoryId) => handleOpenRequestModal(null, initialText, categoryId)}
                     onSelectCategory={(catId) => handleOpenRequestModal(null, undefined, catId)}
-                    services={SERVICES_LIST}
-                  />
-
-                  {/* Main Services Grid (Clean) */}
-                  <ServicesGrid
-                    services={SERVICES_LIST}
-                    onSelectService={(serv) => handleOpenRequestModal(serv)}
-                    onOpenGenericRequest={() => handleOpenRequestModal(null)}
+                    services={services}
                   />
                 </div>
               )}
@@ -637,6 +795,8 @@ export default function App() {
                 <div className="animate-fade-in">
                   <OrderTracking
                     requests={requests}
+                    currentUser={currentUser}
+                    onOpenAuth={handleOpenAuth}
                     onApproveQuote={handleApproveQuoteByClient}
                     onOpenReviewModal={handleOpenReviewModal}
                     onNewRequestClick={() => handleOpenRequestModal(null)}
@@ -658,6 +818,7 @@ export default function App() {
             users={users}
             charges={commissionCharges}
             gatewaySettings={gatewaySettings}
+            services={services}
             currentUser={currentUser}
             onOpenAuth={handleOpenAuth}
             onSendQuote={handleSendQuoteByAdmin}
@@ -671,15 +832,20 @@ export default function App() {
             onUpdateChargeStatus={handleUpdateChargeStatus}
             onIssueBoletoAndNfse={handleIssueBoletoAndNfse}
             onSaveGatewaySettings={handleSaveGatewaySettings}
+            onDeleteService={handleDeleteService}
+            onResetServices={handleResetServices}
+            onPurgeAllData={handlePurgeAllData}
           />
         )}
 
         {/* VIEW 3: CADASTRO E ÁREA DO PROFISSIONAL */}
         {currentView === 'professional' && (
           <ProfessionalRegistration
-            services={SERVICES_LIST}
+            services={services}
             professionals={professionals}
             requests={requests}
+            currentUser={currentUser}
+            onOpenAuth={handleOpenAuth}
             onRegisterProfessional={handleRegisterProfessional}
             onSendQuote={handleSendQuoteByAdmin}
             onNavigateToApp={() => setCurrentView('client')}
@@ -693,10 +859,11 @@ export default function App() {
         isOpen={isRequestModalOpen}
         onClose={() => setIsRequestModalOpen(false)}
         service={selectedServiceForModal}
-        allServices={SERVICES_LIST}
+        allServices={services}
         onSubmitRequest={handleCreateRequest}
         currentUser={currentUser}
         initialDescription={requestInitialDescription}
+        onRequireRegister={handleRequireRegisterFromRequest}
       />
 
       {/* AVALIAÇÃO DO SERVIÇO MODAL ("Como foi o serviço?") */}
@@ -710,7 +877,11 @@ export default function App() {
       {/* LOGIN & CADASTRO MODAL */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setForceRegisterInAuth(false);
+          setAuthRequiredNotice('');
+        }}
         users={users}
         currentUser={currentUser}
         onLogin={handleLogin}
@@ -718,6 +889,16 @@ export default function App() {
         onUpdateUser={handleUpdateUser}
         onLogout={handleLogout}
         initialMode={authModalInitialMode}
+        forceRegisterMode={forceRegisterInAuth}
+        requiredNotice={authRequiredNotice}
+        prefilledRegistration={pendingRequestDraft ? {
+          name: pendingRequestDraft.clientName,
+          phone: pendingRequestDraft.clientPhone,
+          street: pendingRequestDraft.street,
+          neighborhood: pendingRequestDraft.neighborhood,
+          city: pendingRequestDraft.city,
+          role: 'cliente'
+        } : undefined}
       />
 
       {/* SUPABASE CLOUD & MIGRATIONS MODAL */}
@@ -726,6 +907,15 @@ export default function App() {
         onClose={() => setIsSupabaseModalOpen(false)}
         onRefreshData={loadDataFromSupabase}
       />
+
+      {/* Visual Feedback Toast */}
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
 
       {/* Footer Branding with Official Logo */}
       <footer className="bg-[#001838] text-slate-400 py-8 text-center text-xs border-t border-slate-800 mt-12">
@@ -741,22 +931,24 @@ export default function App() {
           </div>
 
           {/* Quick WhatsApp Contacts in Footer */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <span className="text-slate-400 text-[11px]">WhatsApp Oficial:</span>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <span className="text-slate-400 text-xs font-medium">WhatsApp / Atendimento:</span>
             <a 
               href="https://wa.me/5512992555104?text=Ol%C3%A1,%20gostaria%20de%20solicitar%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
               target="_blank" 
               rel="noreferrer" 
-              className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1"
+              className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 text-xs shadow-sm"
             >
+              <MessageSquare className="w-3.5 h-3.5 fill-emerald-400" />
               <span>(12) 99255-5104</span>
             </a>
             <a 
               href="https://wa.me/5512991601322?text=Ol%C3%A1,%20gostaria%20de%20solicitar%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
               target="_blank" 
               rel="noreferrer" 
-              className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1"
+              className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 text-xs shadow-sm"
             >
+              <MessageSquare className="w-3.5 h-3.5 fill-emerald-400" />
               <span>(12) 99160-1322</span>
             </a>
           </div>

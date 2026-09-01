@@ -27,9 +27,10 @@ import {
   Radio,
   FileText,
   Scale,
-  ShieldCheck
+  ShieldCheck,
+  UserPlus
 } from 'lucide-react';
-import { ServiceRequest, ProfessionalProfile, ServiceDefinition, ServiceCategory } from '../types';
+import { ServiceRequest, ProfessionalProfile, ServiceDefinition, ServiceCategory, UserAccount } from '../types';
 import { DigitalContractModal } from './DigitalContractModal';
 import { SMExpressLogo } from './SMExpressLogo';
 
@@ -37,6 +38,9 @@ interface ProfessionalDemandBoardProps {
   requests: ServiceRequest[];
   professionals: ProfessionalProfile[];
   services: ServiceDefinition[];
+  currentUser?: UserAccount | null;
+  onOpenAuth?: (mode?: 'login' | 'register') => void;
+  onSwitchToRegister?: () => void;
   onSendQuote: (
     requestId: string, 
     price: number, 
@@ -51,9 +55,60 @@ export const ProfessionalDemandBoard: React.FC<ProfessionalDemandBoardProps> = (
   requests,
   professionals,
   services,
+  currentUser,
+  onOpenAuth,
+  onSwitchToRegister,
   onSendQuote
 }) => {
-  // Selected active professional profile (default to the first registered or mock professional)
+  // Guard: If not logged in or role is cliente, show access barrier
+  if (!currentUser || (currentUser.role !== 'profissional' && currentUser.role !== 'admin')) {
+    return (
+      <div className="space-y-6 animate-fade-in py-4">
+        <div className="bg-[#001838] text-white p-6 sm:p-8 rounded-3xl shadow-xl border border-amber-500/30 text-center max-w-xl mx-auto space-y-4">
+          <div className="w-16 h-16 bg-amber-400/20 text-amber-400 border border-amber-400/40 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <Briefcase className="w-8 h-8" />
+          </div>
+
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+              Área Exclusiva de Fornecedores
+            </span>
+            <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-1">
+              Mural de Oportunidades & Orçamentos
+            </h3>
+          </div>
+
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+            Para garantir a privacidade dos clientes e segurança operacional, o acesso às solicitações em aberto e envio de orçamentos é exclusivo para prestadores parceiros cadastrados.
+          </p>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={onSwitchToRegister}
+              className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-400/25 flex items-center justify-center gap-2 uppercase tracking-wider transition-all transform hover:scale-[1.02]"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Cadastrar como Fornecedor</span>
+            </button>
+
+            <button
+              onClick={() => onOpenAuth?.('login')}
+              className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-colors"
+            >
+              <Users className="w-4 h-4 text-amber-400" />
+              <span>Fazer Login Profissional</span>
+            </button>
+          </div>
+
+          <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Acesso individual protegido e auditado</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // Selected active professional profile
   const [selectedProfId, setSelectedProfId] = useState<string>(
     professionals.length > 0 ? professionals[0].id : 'all'
   );
@@ -85,6 +140,7 @@ export const ProfessionalDemandBoard: React.FC<ProfessionalDemandBoardProps> = (
 
   // Digital Contract Modal
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [isCopiedText, setIsCopiedText] = useState(false);
 
   // Current active professional object
   const currentProf = useMemo(() => {
@@ -195,7 +251,7 @@ export const ProfessionalDemandBoard: React.FC<ProfessionalDemandBoardProps> = (
   // Generate automated WhatsApp notification simulation
   const handleOpenWhatsAppSimulator = (req: ServiceRequest) => {
     const profName = currentProf ? currentProf.fullName : 'Profissional SM Express';
-    const profPhone = currentProf ? currentProf.phone : '(12) 99777-1122';
+    const profPhone = currentProf ? currentProf.phone : '(12) 99255-5104';
     const clientPhoneClean = req.clientPhone.replace(/\D/g, '');
 
     const isOutros = req.serviceId === 'outros_servicos';
@@ -788,13 +844,19 @@ export const ProfessionalDemandBoard: React.FC<ProfessionalDemandBoardProps> = (
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(whatsAppModalData.messageText);
-                  alert('Mensagem copiada para a área de transferência!');
+                  setIsCopiedText(true);
+                  setTimeout(() => setIsCopiedText(false), 3000);
                 }}
-                className="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl border border-slate-200"
+                className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                  isCopiedText
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : 'text-slate-700 hover:bg-slate-100 border-slate-200'
+                }`}
               >
-                Copiar Texto
+                {isCopiedText ? '✓ Texto Copiado!' : 'Copiar Texto'}
               </button>
               <a
                 href={whatsAppModalData.whatsappUrl}

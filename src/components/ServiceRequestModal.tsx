@@ -25,6 +25,7 @@ interface ServiceRequestModalProps {
   onSubmitRequest: (newReq: ServiceRequest) => void;
   currentUser?: UserAccount | null;
   initialDescription?: string;
+  onRequireRegister?: (draftData: Partial<ServiceRequest>) => void;
 }
 
 // Normalizer to ignore accents and case
@@ -166,7 +167,8 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
   allServices,
   onSubmitRequest,
   currentUser,
-  initialDescription = ''
+  initialDescription = '',
+  onRequireRegister
 }) => {
   if (!isOpen) return null;
 
@@ -210,13 +212,25 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
   }, [description, service, allServices]);
 
   // Main Simple Fields
-  const [clientName, setClientName] = useState(currentUser?.name || 'Rudson Silva');
-  const [clientPhone, setClientPhone] = useState(currentUser?.phone || '(12) 99876-5432');
+  const [clientName, setClientName] = useState(currentUser?.name || '');
+  const [clientPhone, setClientPhone] = useState(currentUser?.phone || '');
   const [locationAddress, setLocationAddress] = useState(
     currentUser?.street 
-      ? `${currentUser.street}, ${currentUser.number || '123'} - ${currentUser.neighborhood || 'Centro'}, ${currentUser.city || 'Taubaté'}` 
-      : 'Jardim América, Taubaté - SP'
+      ? `${currentUser.street}, ${currentUser.number || 'S/N'} - ${currentUser.neighborhood || 'Centro'}, ${currentUser.city || 'Taubaté'}` 
+      : ''
   );
+
+  // Sync if currentUser updates
+  useEffect(() => {
+    if (currentUser) {
+      if (!clientName) setClientName(currentUser.name);
+      if (!clientPhone) setClientPhone(currentUser.phone);
+      if (!locationAddress && currentUser.street) {
+        setLocationAddress(`${currentUser.street}, ${currentUser.number || 'S/N'} - ${currentUser.neighborhood || 'Centro'}, ${currentUser.city || 'Taubaté'}`);
+      }
+    }
+  }, [currentUser]);
+
   const [desiredDate, setDesiredDate] = useState(() => {
     const today = new Date();
     today.setDate(today.getDate() + 1);
@@ -245,7 +259,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
 
     const remainingSlots = 3 - photos.length;
     if (remainingSlots <= 0) {
-      alert('Limite máximo de 3 fotos atingido.');
+      setErrors(prev => ({ ...prev, photos: 'Limite máximo de 3 fotos atingido.' }));
       return;
     }
 
@@ -307,12 +321,38 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
 
     const fullMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationAddress + ', Brasil')}`;
 
+    // If user is not logged in, enforce registration before completing request
+    if (!currentUser) {
+      const draftData: Partial<ServiceRequest> = {
+        serviceId: detectedService.id,
+        serviceTitle: detectedService.title,
+        clientName: clientName.trim(),
+        clientPhone: clientPhone.trim(),
+        details: {
+          'Descrição do Pedido': description.trim(),
+          'Urgência': urgency === 'urgente' ? 'Urgente / Imediato' : urgency === 'fim_de_semana' ? 'Fim de Semana' : 'Normal / Flexível'
+        },
+        desiredDate: desiredDate,
+        street: mainStreet,
+        neighborhood: rest,
+        city: 'Taubaté',
+        state: 'SP',
+        photos: photos
+      };
+
+      if (onRequireRegister) {
+        onRequireRegister(draftData);
+        onClose();
+        return;
+      }
+    }
+
     const newRequest: ServiceRequest = {
       id: `REQ-${Math.floor(1000 + Math.random() * 9000)}`,
       serviceId: detectedService.id,
       serviceTitle: detectedService.title,
-      clientName: clientName.trim(),
-      clientPhone: clientPhone.trim(),
+      clientName: (currentUser?.name || clientName).trim(),
+      clientPhone: (currentUser?.phone || clientPhone).trim(),
       clientEmail: currentUser?.email || 'cliente@smexpress.com.br',
       details: {
         'Descrição do Pedido': description.trim(),
@@ -371,6 +411,23 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
           {!isSuccess ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               
+              {/* Not Logged In Notice */}
+              {!currentUser && (
+                <div className="p-3 bg-gradient-to-r from-amber-500/15 via-amber-400/10 to-transparent border border-amber-400/50 rounded-2xl text-xs text-amber-950 flex items-start gap-2.5 shadow-sm">
+                  <div className="p-1 bg-amber-400 text-slate-950 rounded-lg font-black text-xs flex-shrink-0 mt-0.5">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-slate-900 block text-xs">
+                      Cadastro Obrigatório para Finalização
+                    </span>
+                    <p className="text-[11px] text-slate-700 leading-snug mt-0.5">
+                      Para emitir orçamentos seguros e permitir o acompanhamento dos seus serviços em tempo real, o cadastro de cliente será concluído ao enviar este pedido.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Validation Error Alert */}
               {Object.keys(errors).length > 0 && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
@@ -425,7 +482,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                         setClientName(e.target.value);
                         if (errors.clientName) setErrors(prev => ({ ...prev, clientName: '' }));
                       }}
-                      placeholder="Ex: João da Silva"
+                      placeholder="Seu nome completo"
                       className={`w-full pl-9 pr-3 py-2.5 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none ${
                         errors.clientName ? 'border-red-500 bg-red-50/20' : 'border-slate-300'
                       }`}
@@ -448,7 +505,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                         setClientPhone(formatPhone(e.target.value));
                         if (errors.clientPhone) setErrors(prev => ({ ...prev, clientPhone: '' }));
                       }}
-                      placeholder="(12) 99999-9999"
+                      placeholder="(12) 9XXXX-XXXX"
                       className={`w-full pl-9 pr-3 py-2.5 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none ${
                         errors.clientPhone ? 'border-red-500 bg-red-50/20' : 'border-slate-300'
                       }`}

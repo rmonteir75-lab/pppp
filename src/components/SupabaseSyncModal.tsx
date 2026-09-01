@@ -170,7 +170,7 @@ CREATE POLICY "Public Read/Write commission_charges" ON commission_charges FOR A
 CREATE POLICY "Public Read/Write payment_gateway_settings" ON payment_gateway_settings FOR ALL USING (true);
 
 INSERT INTO users (id, email, name, role, phone, city, state, notes, status)
-VALUES ('USR-ADM-001', 'rmonteir75@gmail.com', 'Administrador Geral SM Express', 'admin', '(12) 99700-1000', 'Taubaté', 'SP', 'Conta Master', 'ativo')
+VALUES ('USR-ADM-001', 'rmonteir75@gmail.com', 'Administrador SM Express', 'admin', '(12) 99255-5104', 'Taubaté', 'SP', 'Conta Master Oficial', 'ativo')
 ON CONFLICT (email) DO NOTHING;`;
 
   const handleCopy = () => {

@@ -46,6 +46,9 @@ interface AuthModalProps {
   onUpdateUser?: (updatedUser: UserAccount) => void;
   onLogout: () => void;
   initialMode?: 'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access';
+  requiredNotice?: string;
+  forceRegisterMode?: boolean;
+  prefilledRegistration?: Partial<UserAccount>;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -57,18 +60,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onRegister,
   onUpdateUser,
   onLogout,
-  initialMode = 'login'
+  initialMode = 'login',
+  requiredNotice,
+  forceRegisterMode = false,
+  prefilledRegistration
 }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access'>(
-    currentUser ? 'profile' : initialMode
+    currentUser ? 'profile' : forceRegisterMode ? 'register' : initialMode
   );
 
   // Sync active tab when modal opens or initialMode / currentUser changes
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(currentUser ? 'profile' : initialMode);
+      setActiveTab(currentUser ? 'profile' : forceRegisterMode ? 'register' : initialMode);
+      if (prefilledRegistration) {
+        if (prefilledRegistration.name) setRegName(prefilledRegistration.name);
+        if (prefilledRegistration.phone) setRegPhone(prefilledRegistration.phone);
+        if (prefilledRegistration.street) setRegStreet(prefilledRegistration.street);
+        if (prefilledRegistration.neighborhood) setRegNeighborhood(prefilledRegistration.neighborhood);
+        if (prefilledRegistration.city) setRegCity(prefilledRegistration.city);
+        if (prefilledRegistration.role) setRegRole(prefilledRegistration.role);
+      }
     }
-  }, [isOpen, initialMode, currentUser]);
+  }, [isOpen, initialMode, currentUser, forceRegisterMode, prefilledRegistration]);
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -142,6 +156,76 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [editCity, setEditCity] = useState('');
   const [editState, setEditState] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
+
+  // CEP Lookups for Register and Edit Profile
+  const [isRegCepLoading, setIsRegCepLoading] = useState(false);
+  const [regCepMessage, setRegCepMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isEditCepLoading, setIsEditCepLoading] = useState(false);
+  const [editCepMessage, setEditCepMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const handleRegCepLookup = async (cepVal: string) => {
+    const clean = cepVal.replace(/\D/g, '');
+    if (clean.length === 8) {
+      setIsRegCepLoading(true);
+      setRegCepMessage(null);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          if (data.logradouro) setRegStreet(data.logradouro);
+          if (data.bairro) setRegNeighborhood(data.bairro);
+          if (data.localidade) setRegCity(data.localidade);
+          if (data.uf) setRegState(data.uf);
+          if (data.complemento && !regComplement) setRegComplement(data.complemento);
+          setRegCepMessage({ text: `✓ ${data.localidade}/${data.uf}`, type: 'success' });
+        } else {
+          setRegCepMessage({ text: 'CEP não encontrado', type: 'error' });
+        }
+      } catch (err) {
+        console.error('Erro ao consultar CEP:', err);
+        setRegCepMessage({ text: 'Erro ao consultar CEP', type: 'error' });
+      } finally {
+        setIsRegCepLoading(false);
+      }
+    }
+  };
+
+  const handleEditCepLookup = async (cepVal: string) => {
+    const clean = cepVal.replace(/\D/g, '');
+    if (clean.length === 8) {
+      setIsEditCepLoading(true);
+      setEditCepMessage(null);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          if (data.logradouro) setEditStreet(data.logradouro);
+          if (data.bairro) setEditNeighborhood(data.bairro);
+          if (data.localidade) setEditCity(data.localidade);
+          if (data.uf) setEditState(data.uf);
+          if (data.complemento && !editComplement) setEditComplement(data.complemento);
+          setEditCepMessage({ text: `✓ ${data.localidade}/${data.uf}`, type: 'success' });
+        } else {
+          setEditCepMessage({ text: 'CEP não encontrado', type: 'error' });
+        }
+      } catch (err) {
+        console.error('Erro ao consultar CEP:', err);
+        setEditCepMessage({ text: 'Erro ao consultar CEP', type: 'error' });
+      } finally {
+        setIsEditCepLoading(false);
+      }
+    }
+  };
+
+  // Change Password in Profile State
+  const [changePasswordActive, setChangePasswordActive] = useState(false);
+  const [editCurrentPassword, setEditCurrentPassword] = useState('');
+  const [editNewPassword, setEditNewPassword] = useState('');
+  const [editConfirmNewPassword, setEditConfirmNewPassword] = useState('');
+  const [showEditCurrentPass, setShowEditCurrentPass] = useState(false);
+  const [showEditNewPass, setShowEditNewPass] = useState(false);
+  const [showEditConfirmPass, setShowEditConfirmPass] = useState(false);
 
   // Photo Input Refs
   const regPhotoInputRef = React.useRef<HTMLInputElement>(null);
@@ -186,16 +270,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleUseSampleRegPhoto = () => {
-    const sample = regRole === 'profissional'
-      ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&h=400&q=80'
-      : regRole === 'admin'
-      ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&h=400&q=80'
-      : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80';
-    setRegPhoto3x4(sample);
-    setRegPhoto3x4Name('Foto_3x4_Padrao_ID.jpg');
-  };
-
   // Handle Photo 3x4 Upload for Edit Profile
   const handleEditPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -212,10 +286,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleUseSampleEditPhoto = () => {
-    setEditAvatarUrl('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80');
   };
 
   // Format Helper Functions
@@ -314,7 +384,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         totalRequests: 0,
         totalSpent: 0,
         lastAccess: new Date().toISOString(),
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+        avatarUrl: '',
         createdAt: new Date().toISOString()
       };
       onRegister(fallbackAdmin);
@@ -329,7 +399,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setAdminSuccess('');
 
     const cleanEmail = adminEmail.trim().toLowerCase();
-    const foundAdmin = users.find(u => u.email.toLowerCase() === cleanEmail);
+    let foundAdmin = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    // Fallback if master admin is logging in but not yet in state
+    if (!foundAdmin && cleanEmail === 'rmonteir75@gmail.com' && adminPassword === 'Rmonte14*') {
+      const defaultMaster: UserAccount = {
+        id: 'USR-ADM-001',
+        name: 'Administrador SM Express',
+        email: 'rmonteir75@gmail.com',
+        phone: '(12) 99255-5104',
+        role: 'admin',
+        password: 'Rmonte14*',
+        cpfCnpj: '54.892.311/0001-90',
+        rg: '',
+        birthDate: '1980-01-01',
+        gender: 'outro',
+        cep: '12010-000',
+        street: 'Avenida Tiradentes',
+        number: '500',
+        complement: 'Sala 402',
+        neighborhood: 'Centro',
+        city: 'Taubaté',
+        state: 'SP',
+        status: 'ativo',
+        isCompleteRegistration: true,
+        notes: 'Conta Oficial do Administrador do Sistema SM Express.',
+        totalRequests: 0,
+        totalSpent: 0,
+        lastAccess: new Date().toISOString(),
+        avatarUrl: '',
+        createdAt: new Date().toISOString()
+      };
+      onRegister(defaultMaster);
+      foundAdmin = defaultMaster;
+    }
 
     if (!foundAdmin) {
       setAdminError('E-mail administrativo não localizado no sistema.');
@@ -538,12 +641,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       totalSpent: 0,
       lastAccess: new Date().toISOString(),
       createdAt: new Date().toISOString(),
-      avatarUrl: regPhoto3x4 || (regRole === 'profissional' 
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&h=400&q=80'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80'),
-      photo3x4Url: regPhoto3x4 || (regRole === 'profissional' 
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&h=400&q=80'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80')
+      avatarUrl: regPhoto3x4 || '',
+      photo3x4Url: regPhoto3x4 || ''
     };
 
     onRegister(newAccount);
@@ -557,11 +656,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+    setProfileError('');
+
+    // Validação de Troca de Senha (se ativada ou preenchida)
+    let updatedPassword = currentUser.password;
+    if (changePasswordActive || editNewPassword.trim() || editCurrentPassword.trim()) {
+      if (currentUser.password && editCurrentPassword !== currentUser.password) {
+        setProfileError('A senha atual informada está incorreta.');
+        return;
+      }
+      if (!editNewPassword || editNewPassword.length < 3) {
+        setProfileError('A nova senha deve ter no mínimo 3 caracteres.');
+        return;
+      }
+      if (editNewPassword !== editConfirmNewPassword) {
+        setProfileError('A confirmação da nova senha não confere com a nova senha digitada.');
+        return;
+      }
+      updatedPassword = editNewPassword;
+    }
 
     const isComplete = Boolean(editCpf && editPhone && editStreet && editCity);
 
     const updated: UserAccount = {
       ...currentUser,
+      password: updatedPassword,
       name: editName,
       phone: editPhone,
       avatarUrl: editAvatarUrl || currentUser.avatarUrl,
@@ -582,9 +701,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (onUpdateUser) {
       onUpdateUser(updated);
     }
-    setProfileSuccess('Dados cadastrais atualizados com sucesso!');
+    
+    if ((changePasswordActive || editNewPassword.trim()) && updatedPassword !== currentUser.password) {
+      setProfileSuccess('Dados cadastrais e nova senha atualizados com sucesso!');
+    } else {
+      setProfileSuccess('Dados cadastrais atualizados com sucesso!');
+    }
+
+    // Reset password change inputs
+    setEditCurrentPassword('');
+    setEditNewPassword('');
+    setEditConfirmNewPassword('');
+    setChangePasswordActive(false);
     setIsEditingProfile(false);
-    setTimeout(() => setProfileSuccess(''), 3000);
+    setTimeout(() => setProfileSuccess(''), 3500);
   };
 
   return (
@@ -629,42 +759,55 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Navigation tabs if not logged in */}
         {!currentUser && (
-          <div className="grid grid-cols-3 border-b border-slate-800 bg-slate-950/60 p-1.5 gap-1">
-            <button
-              onClick={() => { setActiveTab('login'); setLoginError(''); setForgotError(''); setForgotSuccess(''); setAdminError(''); setAdminSuccess(''); }}
-              className={`py-2.5 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'login'
-                  ? 'bg-amber-400 text-slate-950 shadow font-black'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Entrar</span>
-            </button>
+          <div>
+            {requiredNotice && (
+              <div className="bg-amber-400 text-slate-950 px-4 py-2.5 flex items-center gap-2 text-xs font-black border-b border-amber-500 shadow-inner">
+                <Sparkles className="w-4 h-4 flex-shrink-0 animate-bounce" />
+                <span>{requiredNotice}</span>
+              </div>
+            )}
+            
+            <div className={`grid ${forceRegisterMode ? 'grid-cols-1' : 'grid-cols-3'} border-b border-slate-800 bg-slate-950/60 p-1.5 gap-1`}>
+              {!forceRegisterMode && (
+                <button
+                  onClick={() => { setActiveTab('login'); setLoginError(''); setForgotError(''); setForgotSuccess(''); setAdminError(''); setAdminSuccess(''); }}
+                  className={`py-2.5 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    activeTab === 'login'
+                      ? 'bg-amber-400 text-slate-950 shadow font-black'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Entrar</span>
+                </button>
+              )}
 
-            <button
-              onClick={() => { setActiveTab('register'); setRegError(''); setForgotError(''); setForgotSuccess(''); setAdminError(''); setAdminSuccess(''); }}
-              className={`py-2.5 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'register'
-                  ? 'bg-amber-400 text-slate-950 shadow font-black'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Cadastrar</span>
-            </button>
+              <button
+                onClick={() => { setActiveTab('register'); setRegError(''); setForgotError(''); setForgotSuccess(''); setAdminError(''); setAdminSuccess(''); }}
+                className={`py-2.5 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  activeTab === 'register' || forceRegisterMode
+                    ? 'bg-amber-400 text-slate-950 shadow font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>{forceRegisterMode ? 'Cadastro Obrigatório de Cliente' : 'Cadastrar'}</span>
+              </button>
 
-            <button
-              onClick={() => { setActiveTab('admin_access'); setLoginError(''); setForgotError(''); setForgotSuccess(''); setAdminError(''); setAdminSuccess(''); }}
-              className={`py-2.5 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 border ${
-                activeTab === 'admin_access'
-                  ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-slate-950 border-amber-300 shadow font-black'
-                  : 'bg-slate-900/80 text-amber-300 border-amber-500/30 hover:bg-amber-500/10'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
-              <span>Acesso ADM</span>
-            </button>
+              {!forceRegisterMode && (
+                <button
+                  onClick={() => { setActiveTab('admin_access'); setLoginError(''); setForgotError(''); setForgotSuccess(''); setAdminError(''); setAdminSuccess(''); }}
+                  className={`py-2.5 px-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 border ${
+                    activeTab === 'admin_access'
+                      ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-slate-950 border-amber-300 shadow font-black'
+                      : 'bg-slate-900/80 text-amber-300 border-amber-500/30 hover:bg-amber-500/10'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Acesso ADM</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -677,12 +820,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Profile Card Summary */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-950 p-5 rounded-2xl border border-slate-800">
                 <div className="flex items-center gap-4">
-                  <div className="relative w-16 h-20 rounded-xl overflow-hidden border-2 border-amber-400 shadow-md bg-slate-900 flex-shrink-0">
-                    <img
-                      src={currentUser.photo3x4Url || currentUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80"}
-                      alt={currentUser.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="relative w-16 h-20 rounded-xl overflow-hidden border-2 border-amber-400 shadow-md bg-slate-900 flex-shrink-0 flex items-center justify-center">
+                    {(currentUser.photo3x4Url || currentUser.avatarUrl) ? (
+                      <img
+                        src={currentUser.photo3x4Url || currentUser.avatarUrl}
+                        alt={currentUser.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-amber-400">
+                        <User className="w-8 h-8 opacity-80" />
+                        <span className="text-[10px] font-bold mt-1 text-slate-300">
+                          {currentUser.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                     <span className="absolute bottom-0 inset-x-0 bg-slate-950/90 text-[8px] font-mono text-amber-400 text-center font-bold">
                       ID 3/4
                     </span>
@@ -737,23 +889,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Editable Form */}
               {isEditingProfile ? (
                 <form onSubmit={handleSaveProfile} className="space-y-4 bg-slate-950 p-5 rounded-2xl border border-slate-800">
-                  <h5 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                    <Edit3 className="w-3.5 h-3.5" />
-                    Editar Dados Cadastrais & Foto de Acesso
-                  </h5>
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Edit3 className="w-3.5 h-3.5" />
+                      Editar Dados Cadastrais & Segurança
+                    </h5>
+                  </div>
+
+                  {profileError && (
+                    <div className="p-3 bg-red-500/15 border border-red-500/40 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{profileError}</span>
+                    </div>
+                  )}
 
                   {/* Foto 3/4 Edit */}
                   <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3">
                     <div 
                       onClick={() => editPhotoInputRef.current?.click()}
-                      className="relative w-14 h-18 rounded-lg overflow-hidden border-2 border-amber-400 bg-slate-800 cursor-pointer flex-shrink-0 group"
+                      className="relative w-14 h-18 rounded-lg overflow-hidden border-2 border-amber-400 bg-slate-800 cursor-pointer flex-shrink-0 group flex items-center justify-center"
                       title="Alterar Foto 3/4"
                     >
-                      <img
-                        src={editAvatarUrl || currentUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&h=400&q=80"}
-                        alt="Foto 3x4"
-                        className="w-full h-full object-cover"
-                      />
+                      {(editAvatarUrl || currentUser.photo3x4Url || currentUser.avatarUrl) ? (
+                        <img
+                          src={editAvatarUrl || currentUser.photo3x4Url || currentUser.avatarUrl}
+                          alt="Foto 3x4"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-amber-400">
+                          <User className="w-6 h-6 opacity-70" />
+                        </div>
+                      )}
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                         <Camera className="w-4 h-4" />
                       </div>
@@ -770,13 +937,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         >
                           <Upload className="w-3 h-3" />
                           Trocar Foto
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleUseSampleEditPhoto}
-                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded-lg transition-colors"
-                        >
-                          Usar Padrão
                         </button>
                       </div>
                       <input
@@ -843,14 +1003,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   {/* Endereço */}
                   <div className="pt-2 border-t border-slate-800">
-                    <h6 className="text-[11px] font-bold text-slate-300 mb-2">Endereço Residencial / Comercial</h6>
+                    <div className="flex items-center justify-between mb-2">
+                      <h6 className="text-[11px] font-bold text-slate-300">Endereço Residencial / Comercial</h6>
+                      {isEditCepLoading && (
+                        <span className="text-[10px] text-amber-400 font-bold animate-pulse">
+                          Buscando CEP...
+                        </span>
+                      )}
+                      {editCepMessage && !isEditCepLoading && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            editCepMessage.type === 'success'
+                              ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/60'
+                              : 'text-red-400 bg-red-950/60 border border-red-800/60'
+                          }`}
+                        >
+                          {editCepMessage.text}
+                        </span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                       <div>
                         <label className="block text-[10px] text-slate-400 mb-1">CEP</label>
                         <input
                           type="text"
                           value={editCep}
-                          onChange={(e) => setEditCep(formatCEP(e.target.value))}
+                          onChange={(e) => {
+                            const formatted = formatCEP(e.target.value);
+                            setEditCep(formatted);
+                            const clean = formatted.replace(/\D/g, '');
+                            if (clean.length === 8) {
+                              handleEditCepLookup(clean);
+                            } else if (editCepMessage) {
+                              setEditCepMessage(null);
+                            }
+                          }}
+                          onBlur={() => handleEditCepLookup(editCep)}
+                          placeholder="12000-000"
+                          maxLength={9}
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
@@ -860,6 +1050,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           type="text"
                           value={editStreet}
                           onChange={(e) => setEditStreet(e.target.value)}
+                          placeholder="Ex: Rua das Palmeiras"
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
@@ -872,6 +1063,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           type="text"
                           value={editNumber}
                           onChange={(e) => setEditNumber(e.target.value)}
+                          placeholder="123"
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
@@ -881,6 +1073,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           type="text"
                           value={editComplement}
                           onChange={(e) => setEditComplement(e.target.value)}
+                          placeholder="Apto 12"
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
@@ -890,25 +1083,178 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           type="text"
                           value={editNeighborhood}
                           onChange={(e) => setEditNeighborhood(e.target.value)}
+                          placeholder="Bairro"
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-slate-400 mb-1">Cidade/UF</label>
-                        <input
-                          type="text"
-                          value={`${editCity || 'Taubaté'} - ${editState || 'SP'}`}
-                          onChange={(e) => setEditCity(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
-                        />
+                        <label className="block text-[10px] text-slate-400 mb-1">Cidade / UF</label>
+                        <div className="grid grid-cols-3 gap-1">
+                          <input
+                            type="text"
+                            value={editCity}
+                            onChange={(e) => setEditCity(e.target.value)}
+                            placeholder="Cidade"
+                            className="col-span-2 bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                          />
+                          <input
+                            type="text"
+                            value={editState}
+                            maxLength={2}
+                            onChange={(e) => setEditState(e.target.value.toUpperCase())}
+                            placeholder="UF"
+                            className="col-span-1 bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-white uppercase text-center focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Trocar Senha / Segurança de Acesso */}
+                  <div className="pt-3 border-t border-slate-800">
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-400 flex items-center justify-center">
+                            <KeyRound className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">Trocar Senha de Acesso</span>
+                            <span className="text-[10px] text-slate-400 block">Redefina sua senha de login na plataforma</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChangePasswordActive(!changePasswordActive);
+                            setProfileError('');
+                            if (changePasswordActive) {
+                              setEditCurrentPassword('');
+                              setEditNewPassword('');
+                              setEditConfirmNewPassword('');
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                            changePasswordActive 
+                              ? 'bg-amber-400 text-slate-950 border-amber-300 shadow'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>{changePasswordActive ? 'Ocultar / Cancelar' : 'Trocar Senha'}</span>
+                        </button>
+                      </div>
+
+                      {changePasswordActive && (
+                        <div className="space-y-3 pt-2 border-t border-slate-800/80 animate-fade-in">
+                          {currentUser.password && (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                                Senha Atual <span className="text-red-400">*</span>
+                              </label>
+                              <div className="relative">
+                                <Lock className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                                <input
+                                  type={showEditCurrentPass ? 'text' : 'password'}
+                                  value={editCurrentPassword}
+                                  onChange={(e) => setEditCurrentPassword(e.target.value)}
+                                  placeholder="Digite sua senha atual"
+                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-9 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditCurrentPass(!showEditCurrentPass)}
+                                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                                >
+                                  {showEditCurrentPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                                Nova Senha <span className="text-red-400">*</span>
+                              </label>
+                              <div className="relative">
+                                <KeyRound className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                                <input
+                                  type={showEditNewPass ? 'text' : 'password'}
+                                  value={editNewPassword}
+                                  onChange={(e) => setEditNewPassword(e.target.value)}
+                                  placeholder="Mínimo 3 caracteres"
+                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-9 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditNewPass(!showEditNewPass)}
+                                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                                >
+                                  {showEditNewPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                                Confirmar Nova Senha <span className="text-red-400">*</span>
+                              </label>
+                              <div className="relative">
+                                <CheckCircle2 className={`w-3.5 h-3.5 absolute left-3 top-2.5 ${
+                                  editConfirmNewPassword && editNewPassword === editConfirmNewPassword ? 'text-emerald-400' : 'text-slate-500'
+                                }`} />
+                                <input
+                                  type={showEditConfirmPass ? 'text' : 'password'}
+                                  value={editConfirmNewPassword}
+                                  onChange={(e) => setEditConfirmNewPassword(e.target.value)}
+                                  placeholder="Repita a nova senha"
+                                  className={`w-full bg-slate-950 border rounded-xl pl-9 pr-9 py-2 text-xs text-white focus:outline-none font-mono ${
+                                    editConfirmNewPassword && editNewPassword !== editConfirmNewPassword
+                                      ? 'border-red-500/80 focus:border-red-400'
+                                      : 'border-slate-800 focus:border-amber-400'
+                                  }`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditConfirmPass(!showEditConfirmPass)}
+                                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                                >
+                                  {showEditConfirmPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {editNewPassword && editConfirmNewPassword && (
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              {editNewPassword === editConfirmNewPassword ? (
+                                <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> As novas senhas coincidem
+                                </span>
+                              ) : (
+                                <span className="text-red-400 font-semibold flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3" /> As senhas não conferem
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="pt-2 flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => setIsEditingProfile(false)}
+                      onClick={() => {
+                        setIsEditingProfile(false);
+                        setProfileError('');
+                        setChangePasswordActive(false);
+                        setEditCurrentPassword('');
+                        setEditNewPassword('');
+                        setEditConfirmNewPassword('');
+                      }}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors"
                     >
                       Cancelar
@@ -998,7 +1344,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="seu.email@exemplo.com"
+                      placeholder="seu.email@dominio.com.br"
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
                     />
                   </div>
@@ -1104,7 +1450,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
-                      placeholder="admin@smexpress.com"
+                      placeholder="rmonteir75@gmail.com"
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
                     />
                   </div>
@@ -1364,14 +1710,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             <span>{regPhoto3x4 ? 'Alterar Foto 3/4' : 'Importar Foto 3/4'}</span>
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={handleUseSampleRegPhoto}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold rounded-lg transition-colors"
-                          >
-                            Usar Foto de Exemplo
-                          </button>
-
                           {regPhoto3x4 && (
                             <button
                               type="button"
@@ -1419,7 +1757,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={regEmail}
                         onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="email@exemplo.com"
+                        placeholder="seu.email@dominio.com.br"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
                       />
                     </div>
@@ -1433,7 +1771,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={regPhone}
                         onChange={(e) => setRegPhone(formatPhone(e.target.value))}
-                        placeholder="(12) 99999-0000"
+                        placeholder="(12) 9XXXX-XXXX"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
                       />
                     </div>
@@ -1528,9 +1866,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   {/* Endereço */}
                   <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 space-y-3">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                      <MapPin className="w-4 h-4" />
-                      <span>Endereço Completo para Atendimento</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                        <MapPin className="w-4 h-4" />
+                        <span>Endereço Completo para Atendimento</span>
+                      </div>
+                      {isRegCepLoading && (
+                        <span className="text-[10px] text-amber-400 font-bold animate-pulse">
+                          Buscando CEP...
+                        </span>
+                      )}
+                      {regCepMessage && !isRegCepLoading && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            regCepMessage.type === 'success'
+                              ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-800/60'
+                              : 'text-red-400 bg-red-950/60 border border-red-800/60'
+                          }`}
+                        >
+                          {regCepMessage.text}
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -1539,8 +1895,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         <input
                           type="text"
                           value={regCep}
-                          onChange={(e) => setRegCep(formatCEP(e.target.value))}
+                          onChange={(e) => {
+                            const formatted = formatCEP(e.target.value);
+                            setRegCep(formatted);
+                            const clean = formatted.replace(/\D/g, '');
+                            if (clean.length === 8) {
+                              handleRegCepLookup(clean);
+                            } else if (regCepMessage) {
+                              setRegCepMessage(null);
+                            }
+                          }}
+                          onBlur={() => handleRegCepLookup(regCep)}
                           placeholder="12000-000"
+                          maxLength={9}
                           className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
                         />
                       </div>
@@ -1589,12 +1956,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
                       <div>
                         <label className="block text-[11px] text-slate-400 mb-1">Cidade / UF</label>
-                        <input
-                          type="text"
-                          value={`${regCity} - ${regState}`}
-                          onChange={(e) => setRegCity(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
-                        />
+                        <div className="grid grid-cols-3 gap-1">
+                          <input
+                            type="text"
+                            value={regCity}
+                            onChange={(e) => setRegCity(e.target.value)}
+                            placeholder="Cidade"
+                            className="col-span-2 bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                          />
+                          <input
+                            type="text"
+                            value={regState}
+                            maxLength={2}
+                            onChange={(e) => setRegState(e.target.value.toUpperCase())}
+                            placeholder="UF"
+                            className="col-span-1 bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-white uppercase text-center focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1688,7 +2066,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={forgotEmail}
                         onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="seu.email@exemplo.com ou CPF"
+                        placeholder="seu.email@dominio.com.br ou CPF"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
                       />
                     </div>

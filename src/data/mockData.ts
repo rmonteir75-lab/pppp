@@ -35,7 +35,7 @@ export const INITIAL_USERS: UserAccount[] = [
     totalRequests: 0,
     totalSpent: 0,
     lastAccess: new Date().toISOString(),
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+    avatarUrl: '',
     createdAt: new Date().toISOString()
   }
 ];
@@ -150,26 +150,6 @@ export const SERVICES_LIST: ServiceDefinition[] = [
         label: 'Serviço principal desejado',
         type: 'select',
         options: ['Limpeza e conservação diária', 'Manutenção predial / Reparos', 'Higienização de caixas d\'água / garagens', 'Plano mensal integrado']
-      }
-    ]
-  },
-  {
-    id: 'manutencao_residencial',
-    title: 'Reparos, Instalações e Manutenções',
-    shortDescription: 'Hidráulica, elétrica, pintura, montagem de móveis e muito mais.',
-    fullDescription: 'Mão de obra capacitada para consertos elétricos, vazamentos hidráulicos, pintura residencial/comercial, montagem de móveis e reparos gerais em geral.',
-    iconName: 'Wrench',
-    color: 'bg-amber-600',
-    fields: [
-      {
-        label: 'Tipo de reparo principal',
-        type: 'select',
-        options: ['Elétrica (tomadas, lâmpadas, chuveiro, disjuntores)', 'Hidráulica (vazamentos, pias, torneiras, registros)', 'Pintura pontual / Retoques', 'Montagem de Móveis', 'Múltiplos reparos']
-      },
-      {
-        label: 'Urgência',
-        type: 'select',
-        options: ['Urgente (hoje ou amanhã)', 'Normal (esta semana)', 'Planejado (próximos 15 dias)']
       }
     ]
   },

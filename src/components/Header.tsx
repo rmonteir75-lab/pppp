@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Quick Contact & WhatsApp from Flyer */}
-          <div className="flex items-center space-x-2 sm:space-x-3 text-[10px] sm:text-xs text-slate-300">
+          <div className="flex flex-wrap items-center space-x-1.5 sm:space-x-3 text-[10px] sm:text-xs text-slate-300">
             <a 
               href="https://wa.me/5512992555104?text=Ol%C3%A1,%20gostaria%20de%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
               target="_blank" 
@@ -178,14 +178,14 @@ export const Header: React.FC<HeaderProps> = ({
               <MessageSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-emerald-400" />
               <span>(12) 99255-5104</span>
             </a>
-            <span className="text-slate-600 hidden xs:inline">•</span>
+            <span className="text-slate-500 inline">•</span>
             <a 
               href="https://wa.me/5512991601322?text=Ol%C3%A1,%20gostaria%20de%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
               target="_blank" 
               rel="noreferrer"
-              className="hidden sm:flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold transition-colors py-0.5"
+              className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold transition-colors py-0.5"
             >
-              <MessageSquare className="w-3.5 h-3.5 fill-emerald-400" />
+              <MessageSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-emerald-400" />
               <span>(12) 99160-1322</span>
             </a>
             <span className="text-slate-600 hidden md:inline">•</span>
@@ -207,57 +207,70 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Official Logo Brand from Uploaded Image */}
           <div 
-            onClick={() => onViewChange('client')}
+            onClick={() => {
+              if (currentUser?.role === 'admin') onViewChange('admin');
+              else if (currentUser?.role === 'profissional') onViewChange('professional');
+              else onViewChange('client');
+            }}
             className="flex items-center cursor-pointer group flex-shrink-0"
           >
             <SMExpressLogo variant="horizontal" size="sm" customSize={46} showTagline={false} />
           </div>
 
-          {/* Navigation Tabs (Mode Switcher) */}
+          {/* Navigation Tabs (Role-Based Display) */}
           <div className="hidden md:flex items-center bg-slate-900/80 p-1 rounded-xl border border-slate-700/60 shadow-inner">
-            <button
-              id="nav-client-app"
-              onClick={() => onViewChange('client')}
-              className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all ${
-                currentView === 'client'
-                  ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>App do Cliente</span>
-              {pendingQuotesCount > 0 && (
-                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                  {pendingQuotesCount}
-                </span>
-              )}
-            </button>
+            {/* If NOT logged in, show only public quotation request view */}
+            {!currentUser && (
+              <button
+                id="nav-client-app"
+                onClick={() => onViewChange('client')}
+                className="flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all bg-amber-400 text-slate-950 shadow-md font-black"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Solicitar Orçamento</span>
+              </button>
+            )}
 
-            <button
-              id="nav-admin-panel"
-              onClick={() => onViewChange('admin')}
-              className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all ${
-                currentView === 'admin'
-                  ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Painel Administrativo</span>
-            </button>
+            {/* If logged in as CLIENT, show ONLY App do Cliente */}
+            {currentUser && currentUser.role === 'cliente' && (
+              <button
+                id="nav-client-app"
+                onClick={() => onViewChange('client')}
+                className="flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all bg-amber-400 text-slate-950 shadow-md font-black"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>App do Cliente</span>
+                {pendingQuotesCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                    {pendingQuotesCount}
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              id="nav-professional"
-              onClick={() => onViewChange('professional')}
-              className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all ${
-                currentView === 'professional'
-                  ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Briefcase className="w-4 h-4" />
-              <span>Área do Profissional</span>
-            </button>
+            {/* If logged in as ADMIN, show ONLY Painel Administrativo */}
+            {currentUser && currentUser.role === 'admin' && (
+              <button
+                id="nav-admin-panel"
+                onClick={() => onViewChange('admin')}
+                className="flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all bg-amber-400 text-slate-950 shadow-md font-black"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Painel Administrativo</span>
+              </button>
+            )}
+
+            {/* If logged in as PROFISSIONAL, show ONLY Área do Profissional */}
+            {currentUser && currentUser.role === 'profissional' && (
+              <button
+                id="nav-professional"
+                onClick={() => onViewChange('professional')}
+                className="flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all bg-amber-400 text-slate-950 shadow-md font-black"
+              >
+                <Briefcase className="w-4 h-4" />
+                <span>Área do Profissional</span>
+              </button>
+            )}
           </div>
 
           {/* Right Controls */}
@@ -384,11 +397,17 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => onOpenAuth('profile')}
                   className="flex items-center gap-2 p-1 sm:p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 transition-all text-left"
                 >
-                  <img
-                    src={currentUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80"}
-                    alt={currentUser.name}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-amber-400 flex-shrink-0"
-                  />
+                  {currentUser.avatarUrl || currentUser.photo3x4Url ? (
+                    <img
+                      src={currentUser.avatarUrl || currentUser.photo3x4Url}
+                      alt={currentUser.name}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-amber-400 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-xs flex items-center justify-center border border-amber-400 flex-shrink-0">
+                      {currentUser.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div className="hidden lg:block">
                     <div className="text-xs font-bold text-white leading-tight max-w-[100px] xl:max-w-[120px] truncate">{currentUser.name}</div>
                     <div className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">
@@ -420,41 +439,52 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile View Switcher Bar */}
-        <div className="grid grid-cols-3 gap-1.5 md:hidden mt-2.5 pt-2 border-t border-slate-800 text-xs font-bold">
-          <button
-            onClick={() => onViewChange('client')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all ${
-              currentView === 'client' 
-                ? 'bg-amber-400 text-slate-950 font-black shadow-md' 
-                : 'text-slate-300 hover:text-white bg-slate-900/60'
-            }`}
-          >
-            <Smartphone className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Cliente</span>
-          </button>
-          <button
-            onClick={() => onViewChange('admin')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all ${
-              currentView === 'admin' 
-                ? 'bg-amber-400 text-slate-950 font-black shadow-md' 
-                : 'text-slate-300 hover:text-white bg-slate-900/60'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Admin</span>
-          </button>
-          <button
-            onClick={() => onViewChange('professional')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all ${
-              currentView === 'professional' 
-                ? 'bg-amber-400 text-slate-950 font-black shadow-md' 
-                : 'text-slate-300 hover:text-white bg-slate-900/60'
-            }`}
-          >
-            <Briefcase className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Parceiro</span>
-          </button>
+        {/* Mobile View Switcher Bar (Role-Based Display) */}
+        <div className="grid grid-cols-1 gap-1.5 md:hidden mt-2.5 pt-2 border-t border-slate-800 text-xs font-bold">
+          {!currentUser && (
+            <button
+              onClick={() => onViewChange('client')}
+              className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all bg-amber-400 text-slate-950 font-black shadow-md"
+            >
+              <Smartphone className="w-4 h-4 flex-shrink-0" />
+              <span>Solicitar Orçamento</span>
+            </button>
+          )}
+
+          {currentUser && currentUser.role === 'cliente' && (
+            <button
+              onClick={() => onViewChange('client')}
+              className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all bg-amber-400 text-slate-950 font-black shadow-md"
+            >
+              <Smartphone className="w-4 h-4 flex-shrink-0" />
+              <span>App do Cliente</span>
+              {pendingQuotesCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-1">
+                  {pendingQuotesCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {currentUser && currentUser.role === 'admin' && (
+            <button
+              onClick={() => onViewChange('admin')}
+              className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all bg-amber-400 text-slate-950 font-black shadow-md"
+            >
+              <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
+              <span>Painel Administrativo</span>
+            </button>
+          )}
+
+          {currentUser && currentUser.role === 'profissional' && (
+            <button
+              onClick={() => onViewChange('professional')}
+              className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all bg-amber-400 text-slate-950 font-black shadow-md"
+            >
+              <Briefcase className="w-4 h-4 flex-shrink-0" />
+              <span>Área do Profissional</span>
+            </button>
+          )}
         </div>
 
       </div>

@@ -37,7 +37,7 @@ import {
   Lock,
   PenTool
 } from 'lucide-react';
-import { ProfessionalProfile, ServiceDefinition, ServiceCategory, ServiceRate, DocumentItem, ServiceRequest } from '../types';
+import { ProfessionalProfile, ServiceDefinition, ServiceCategory, ServiceRate, DocumentItem, ServiceRequest, UserAccount } from '../types';
 import { ProfessionalDemandBoard } from './ProfessionalDemandBoard';
 import { DigitalContractModal } from './DigitalContractModal';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
@@ -47,6 +47,8 @@ interface ProfessionalRegistrationProps {
   services: ServiceDefinition[];
   professionals: ProfessionalProfile[];
   requests?: ServiceRequest[];
+  currentUser?: UserAccount | null;
+  onOpenAuth?: (mode?: 'login' | 'register') => void;
   onRegisterProfessional: (profile: Omit<ProfessionalProfile, 'id' | 'createdAt' | 'rating' | 'completedJobs' | 'status'>) => void;
   onSendQuote?: (
     requestId: string, 
@@ -63,6 +65,8 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
   services,
   professionals,
   requests = [],
+  currentUser,
+  onOpenAuth,
   onRegisterProfessional,
   onSendQuote,
   onNavigateToApp
@@ -271,12 +275,12 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Por favor, selecione um arquivo de imagem válido (JPG, PNG, WEBP).');
+      setErrors(prev => ({ ...prev, photo: 'Por favor, selecione um arquivo de imagem válido (JPG, PNG, WEBP).' }));
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      alert('O arquivo deve ter no máximo 10MB.');
+      setErrors(prev => ({ ...prev, photo: 'O arquivo da foto deve ter no máximo 10MB.' }));
       return;
     }
 
@@ -300,7 +304,7 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
     if (!file) return;
 
     if (file.size > 15 * 1024 * 1024) {
-      alert('O documento deve ter no máximo 15MB.');
+      setErrors(prev => ({ ...prev, document: 'O documento deve ter no máximo 15MB.' }));
       return;
     }
 
@@ -324,7 +328,7 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
     if (!files || files.length === 0) return;
 
     if (additionalDocs.length + files.length > 5) {
-      alert('Você pode anexar no máximo 5 documentos complementares.');
+      setErrors(prev => ({ ...prev, additionalDocs: 'Você pode anexar no máximo 5 documentos complementares.' }));
       return;
     }
 
@@ -370,33 +374,6 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
       case 'cartao_cnpj': return 'Cartão CNPJ / MEI';
       default: return 'Outro Documento';
     }
-  };
-
-  // Sample quick tests for users
-  const handleUseSamplePhoto = () => {
-    const samples = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80'
-    ];
-    const picked = samples[Math.floor(Math.random() * samples.length)];
-    setPhotoPreview(picked);
-    setPhotoName('foto_perfil_profissional.jpg');
-    setErrors(prev => {
-      const next = { ...prev };
-      delete next.photo;
-      return next;
-    });
-  };
-
-  const handleUseSampleDoc = () => {
-    setDocPreview('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80');
-    setDocName('cnh_frente_verso_verificada.jpg');
-    setErrors(prev => {
-      const next = { ...prev };
-      delete next.document;
-      return next;
-    });
   };
 
   // ==========================================
@@ -565,8 +542,8 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
       hasVehicle,
       hasOwnTools,
       notes: notes.trim(),
-      photoUrl: photoPreview || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-      photo3x4Url: photoPreview || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      photoUrl: photoPreview || '',
+      photo3x4Url: photoPreview || '',
       docPhotoUrl: docPreview || undefined,
       documents: allCompiledDocs,
       contractSigned: true,
@@ -677,6 +654,9 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
             requests={requests}
             professionals={professionals}
             services={services}
+            currentUser={currentUser}
+            onOpenAuth={onOpenAuth}
+            onSwitchToRegister={() => setActiveTab('cadastro')}
             onSendQuote={(reqId, price, hours, prof, notes, schedDate) => {
               if (onSendQuote) {
                 onSendQuote(reqId, price, hours, prof, notes, schedDate);
@@ -853,7 +833,7 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
                             setPhone(formatPhone(e.target.value));
                             if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
                           }}
-                          placeholder="(12) 99999-8888"
+                          placeholder="(12) 9XXXX-XXXX"
                           maxLength={15}
                           className={`w-full bg-slate-950 border rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none transition-colors ${
                             errors.phone ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-800 focus:border-amber-400'
@@ -1294,13 +1274,6 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
                         >
                           {photoPreview ? 'Substituir Arquivo' : 'Buscar no Dispositivo'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={handleUseSamplePhoto}
-                          className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded font-semibold transition-colors"
-                        >
-                          Usar Foto 3/4 Padrão
-                        </button>
                       </div>
                     </div>
 
@@ -1394,13 +1367,6 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
                           className="text-xs font-bold text-amber-400 hover:text-amber-300 underline"
                         >
                           {docPreview ? 'Substituir Documento' : 'Buscar no Dispositivo'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleUseSampleDoc}
-                          className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded font-semibold transition-colors"
-                        >
-                          Usar Documento Amostra
                         </button>
                       </div>
                     </div>
