@@ -17,10 +17,18 @@ import {
   Bot,
   MessageSquare,
   Mail,
-  ExternalLink
+  ExternalLink,
+  Copy,
+  Check
 } from 'lucide-react';
 import { ServiceIcon } from './ServiceIcon';
-import { notificationService, NotificationLogItem, ADMIN_EMAIL, ADMIN_WHATSAPP_FORMATTED } from '../services/notificationService';
+import { 
+  notificationService, 
+  NotificationLogItem, 
+  ADMIN_EMAIL, 
+  ADMIN_WHATSAPP_FORMATTED,
+  ADMIN_WHATSAPP_BACKUP_FORMATTED 
+} from '../services/notificationService';
 
 interface ServiceRequestModalProps {
   isOpen: boolean;
@@ -288,6 +296,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
   const [photos, setPhotos] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [latestNotif, setLatestNotif] = useState<NotificationLogItem | null>(null);
+  const [copiedMsg, setCopiedMsg] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Photos handling
@@ -762,24 +771,80 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                   Aviso registrado com sucesso para o WhatsApp <strong>{ADMIN_WHATSAPP_FORMATTED}</strong> e e-mail <strong>{ADMIN_EMAIL}</strong>.
                 </p>
                 {latestNotif && (
-                  <div className="pt-1 flex flex-col sm:flex-row gap-2">
-                    <a
-                      href={latestNotif.whatsappUrlAdmin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-colors"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Abrir WhatsApp do Adm</span>
-                      <ExternalLink className="w-3 h-3 opacity-80" />
-                    </a>
-                    <a
-                      href={latestNotif.mailtoUrlAdmin}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold text-xs transition-colors"
-                    >
-                      <Mail className="w-3.5 h-3.5" />
-                      <span>Enviar E-mail ao Adm</span>
-                    </a>
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <a
+                        href={latestNotif.whatsappUrlAdmin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-colors"
+                        title={`WhatsApp Oficial do Administrador (${ADMIN_WHATSAPP_FORMATTED})`}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>WhatsApp Adm ({ADMIN_WHATSAPP_FORMATTED})</span>
+                        <ExternalLink className="w-3 h-3 opacity-80" />
+                      </a>
+
+                      {latestNotif.whatsappUrlAdminBackup && (
+                        <a
+                          href={latestNotif.whatsappUrlAdminBackup}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl font-bold text-xs transition-colors border border-slate-700"
+                          title={`WhatsApp Backup do Administrador (${ADMIN_WHATSAPP_BACKUP_FORMATTED})`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          <span>WhatsApp Backup ({ADMIN_WHATSAPP_BACKUP_FORMATTED})</span>
+                        </a>
+                      )}
+
+                      <a
+                        href={latestNotif.mailtoUrlAdmin}
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold text-xs transition-colors"
+                        title={`Enviar e-mail para ${ADMIN_EMAIL}`}
+                      >
+                        <Mail className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                        <span>Enviar E-mail ao Adm</span>
+                      </a>
+
+                      {latestNotif.whatsappUrlClient && (
+                        <a
+                          href={latestNotif.whatsappUrlClient}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl font-bold text-xs transition-colors"
+                          title="Abrir no meu próprio WhatsApp"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                          <span>Confirmar no Meu WhatsApp</span>
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Botão para Copiar o Texto da Mensagem */}
+                    {latestNotif.messageContentAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(latestNotif.messageContentAdmin || '');
+                          setCopiedMsg(true);
+                          setTimeout(() => setCopiedMsg(false), 3000);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-100/70 hover:bg-emerald-100 text-emerald-900 rounded-xl font-semibold text-[11px] transition-colors border border-emerald-200"
+                      >
+                        {copiedMsg ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Texto da Solicitação Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Copiar Texto Completo da Solicitação</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

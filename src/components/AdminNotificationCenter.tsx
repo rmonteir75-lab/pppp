@@ -13,7 +13,12 @@ import {
   Trash2, 
   ExternalLink,
   ShieldCheck,
-  Bell
+  Bell,
+  Copy,
+  Check,
+  Wrench,
+  Sparkles,
+  Briefcase
 } from 'lucide-react';
 import { 
   notificationService, 
@@ -24,11 +29,14 @@ import {
   ADMIN_WHATSAPP_BACKUP,
   ADMIN_WHATSAPP
 } from '../services/notificationService';
+import { ServiceRequest, ServiceCategory } from '../types';
 
 export const AdminNotificationCenter: React.FC = () => {
   const [history, setHistory] = useState<NotificationLogItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('todos');
   const [testSentMsg, setTestSentMsg] = useState<string | null>(null);
+  const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
 
   const refreshLogs = () => {
     setHistory(notificationService.getNotificationHistory());
@@ -45,6 +53,119 @@ export const AdminNotificationCenter: React.FC = () => {
       notificationService.clearHistory();
       refreshLogs();
     }
+  };
+
+  const handleCopyMessage = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedItemId(id);
+    setTimeout(() => setCopiedItemId(null), 3000);
+  };
+
+  // Simulações operacionais para validação imediata
+  const handleSimulateNewRequest = () => {
+    const dummyReq: ServiceRequest = {
+      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
+      serviceId: 'pequenos_reparos',
+      serviceTitle: 'Instalação Elétrica e Troca de Fiação',
+      clientName: 'Carlos Silva (Teste)',
+      clientPhone: '(12) 99788-1234',
+      clientEmail: 'carlos.teste@gmail.com',
+      details: { 'Descrição': 'Chuveiro parou de esquentar e disjuntor desarmando.', 'Urgência': 'Urgente' },
+      frequency: 'Avulso',
+      desiredDate: new Date().toISOString().split('T')[0],
+      street: 'Av. Charles Schnneider',
+      number: '1250',
+      neighborhood: 'Barranco',
+      city: 'Taubaté',
+      state: 'SP',
+      status: 'pendente_orcamento',
+      createdAt: new Date().toISOString()
+    };
+    notificationService.notifyNewRequest(dummyReq);
+    refreshLogs();
+    setTestSentMsg(`Simulação gerada: Solicitação #${dummyReq.id} disparada para WhatsApp Oficial e E-mail!`);
+    setTimeout(() => setTestSentMsg(null), 6000);
+  };
+
+  const handleSimulateQuoteResponse = () => {
+    const dummyReq: ServiceRequest = {
+      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
+      serviceId: 'manutencao_residencial',
+      serviceTitle: 'Higienização de Ar Condicionado Split',
+      clientName: 'Mariana Lima (Teste)',
+      clientPhone: '(12) 99655-4321',
+      clientEmail: 'mariana.teste@gmail.com',
+      details: { 'Descrição': 'Limpeza preventiva e recarga de gás.' },
+      frequency: 'Avulso',
+      desiredDate: new Date().toISOString().split('T')[0],
+      street: 'Rua Visconde de Tremembé',
+      number: '430',
+      neighborhood: 'Centro',
+      city: 'Taubaté',
+      state: 'SP',
+      status: 'orcamento_recebido',
+      quotedPrice: 280,
+      assignedProfessional: 'ClimaTech Refrigeração',
+      createdAt: new Date().toISOString()
+    };
+    notificationService.notifyQuoteSent(dummyReq, 280, '2 horas', 'ClimaTech Refrigeração', 'Higienização completa com bactericida');
+    refreshLogs();
+    setTestSentMsg(`Simulação gerada: Proposta de R$ 280,00 enviada para cliente e registrada no admin!`);
+    setTimeout(() => setTestSentMsg(null), 6000);
+  };
+
+  const handleSimulateQuoteApproved = () => {
+    const dummyReq: ServiceRequest = {
+      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
+      serviceId: 'manutencao_residencial',
+      serviceTitle: 'Pintura Interna de Apartamento',
+      clientName: 'Roberto Mendes (Teste)',
+      clientPhone: '(12) 99123-8899',
+      clientEmail: 'roberto.mendes@gmail.com',
+      details: { 'Descrição': 'Pintura de 2 quartos e sala com tinta látex.' },
+      frequency: 'Avulso',
+      desiredDate: new Date().toISOString().split('T')[0],
+      street: 'Rua Jacques Félix',
+      number: '88',
+      neighborhood: 'Centro',
+      city: 'Taubaté',
+      state: 'SP',
+      status: 'aprovado',
+      quotedPrice: 650,
+      assignedProfessional: 'Mestre da Pintura Taubaté',
+      createdAt: new Date().toISOString()
+    };
+    notificationService.notifyQuoteApproved(dummyReq, '(12) 99255-5104');
+    refreshLogs();
+    setTestSentMsg(`Simulação gerada: Aprovação de serviço registrada! Adm e prestador notificados.`);
+    setTimeout(() => setTestSentMsg(null), 6000);
+  };
+
+  const handleSimulateStatusComplete = () => {
+    const dummyReq: ServiceRequest = {
+      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
+      serviceId: 'pequenos_reparos',
+      serviceTitle: 'Desentupimento e Troca de Sifão',
+      clientName: 'Fernanda Souza (Teste)',
+      clientPhone: '(12) 99876-5432',
+      clientEmail: 'fernanda.souza@gmail.com',
+      details: { 'Descrição': 'Vazamento na pia da cozinha sanado.' },
+      frequency: 'Avulso',
+      desiredDate: new Date().toISOString().split('T')[0],
+      street: 'Av. Itália',
+      number: '920',
+      neighborhood: 'Independência',
+      city: 'Taubaté',
+      state: 'SP',
+      status: 'concluido',
+      quotedPrice: 190,
+      assignedProfessional: 'Hidráulica Express',
+      createdAt: new Date().toISOString()
+    };
+    notificationService.notifyStatusChanged(dummyReq, 'concluido');
+    refreshLogs();
+    setTestSentMsg(`Simulação gerada: Serviço concluído! Notificação de finalização enviada.`);
+    setTimeout(() => setTestSentMsg(null), 6000);
   };
 
   const handleTestWhatsApp = () => {
@@ -209,6 +330,91 @@ Status: Operando Normalmente`;
           )}
         </div>
 
+        {/* Seletor e Bancada de Simulação Operacional */}
+        <div className="mt-4 pt-4 border-t border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              onClick={() => setIsSimulatorOpen(!isSimulatorOpen)}
+              className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isSimulatorOpen ? 'Ocultar Bancada de Testes de Notificação' : 'Bancada de Simulação de Disparos em Tempo Real'}</span>
+            </button>
+
+            <span className="text-[11px] text-slate-400">
+              ⚡ Teste os fluxos de mensagens para WhatsApp e E-mail sem precisar criar pedidos reais.
+            </span>
+          </div>
+
+          {isSimulatorOpen && (
+            <div className="mt-3 p-4 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                  <Wrench className="w-3.5 h-3.5" />
+                  Simular Eventos Operacionais (Gera Log e Links Reais)
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  Ambiente Seguro • Dispara para {ADMIN_WHATSAPP_FORMATTED} e {ADMIN_EMAIL}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <button
+                  onClick={handleSimulateNewRequest}
+                  className="p-3 bg-blue-950/40 hover:bg-blue-900/60 border border-blue-700/50 rounded-xl text-left transition-colors group"
+                >
+                  <div className="text-xs font-bold text-blue-300 flex items-center gap-1.5 group-hover:text-white">
+                    <Send className="w-3.5 h-3.5 text-blue-400" />
+                    <span>1. Nova Solicitação</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                    Cliente envia pedido de elétrica. Notifica Adm no WhatsApp e E-mail.
+                  </p>
+                </button>
+
+                <button
+                  onClick={handleSimulateQuoteResponse}
+                  className="p-3 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-700/50 rounded-xl text-left transition-colors group"
+                >
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 group-hover:text-white">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>2. Orçamento Pronto</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                    Adm envia proposta de R$ 280 ao cliente com link de aceite.
+                  </p>
+                </button>
+
+                <button
+                  onClick={handleSimulateQuoteApproved}
+                  className="p-3 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-xl text-left transition-colors group"
+                >
+                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 group-hover:text-white">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>3. Aprovação Cliente</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                    Cliente aprova proposta. Notifica Adm e aciona o prestador.
+                  </p>
+                </button>
+
+                <button
+                  onClick={handleSimulateStatusComplete}
+                  className="p-3 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-700/50 rounded-xl text-left transition-colors group"
+                >
+                  <div className="text-xs font-bold text-purple-300 flex items-center gap-1.5 group-hover:text-white">
+                    <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                    <span>4. Serviço Concluído</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                    Conclusão do serviço e solicitação de avaliação ao cliente.
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {testSentMsg && (
           <div className="mt-3 p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center gap-2 font-bold animate-fade-in">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -353,13 +559,45 @@ Status: Operando Normalmente`;
                       href={item.whatsappUrlClient}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+                      className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
                       title="Abrir WhatsApp com o Cliente"
                     >
                       <User className="w-3.5 h-3.5" />
                       <span>WhatsApp Cliente</span>
                     </a>
                   )}
+
+                  {item.whatsappUrlProfessional && (
+                    <a
+                      href={item.whatsappUrlProfessional}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 bg-indigo-900 hover:bg-indigo-800 text-indigo-200 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-indigo-700"
+                      title="Abrir WhatsApp com o Prestador Cadastrado"
+                    >
+                      <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+                      <span>WhatsApp Prestador</span>
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyMessage(item.id, item.messageContentAdmin || item.description)}
+                    className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors border border-slate-200"
+                    title="Copiar texto da notificação"
+                  >
+                    {copiedItemId === item.id ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700 font-bold">Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             );

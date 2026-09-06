@@ -101,8 +101,8 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const cleaned = parsed.map(u => {
-            if (u.email === 'rmonteir75@gmail.com' || u.id === 'USR-ADM-001') {
-              return { ...u, email: 'suportesmservicos@gmail.com' };
+            if (u.email === 'rmonteir75@gmail.com' || u.id === 'USR-ADM-001' || u.email === 'suportesmservicos@gmail.com') {
+              return { ...u, email: 'suportesmservicos@gmail.com', password: '2026Smexpress*' };
             }
             return u;
           }).filter(u => 
@@ -138,8 +138,8 @@ export default function App() {
           parsed.email !== 'joao.cliente@gmail.com' &&
           parsed.email !== 'marcos.piscineiro@smexpress.com'
         ) {
-          if (parsed.email === 'rmonteir75@gmail.com' || parsed.id === 'USR-ADM-001') {
-            return { ...parsed, email: 'suportesmservicos@gmail.com' };
+          if (parsed.email === 'rmonteir75@gmail.com' || parsed.id === 'USR-ADM-001' || parsed.email === 'suportesmservicos@gmail.com') {
+            return { ...parsed, email: 'suportesmservicos@gmail.com', password: '2026Smexpress*' };
           }
           return parsed;
         }
@@ -520,7 +520,7 @@ export default function App() {
     setRequests(prev => [newRequest, ...prev]);
     setClientTab('pedidos'); // Automatically switch to orders tracking
     supabaseService.upsertServiceRequest(newRequest).catch(() => {});
-    notificationService.notifyNewRequest(newRequest);
+    // ServiceRequestModal already triggers notificationService.notifyNewRequest to present live links
     showToast(`Solicitação #${newRequest.id} recebida! Notificações enviadas ao WhatsApp e e-mail (${ADMIN_EMAIL}).`, 'success');
   };
 
@@ -651,11 +651,15 @@ export default function App() {
         supabaseService.upsertCommissionCharge(newCharge).catch(() => {});
         return [newCharge, ...prev];
       });
+    }
 
-      if (approvedReq) {
-        notificationService.notifyQuoteApproved(approvedReq, prof?.phone);
-        showToast(`Orçamento aprovado! Administrador (${ADMIN_WHATSAPP_FORMATTED}) e prestador notificados via WhatsApp.`, 'success');
-      }
+    if (approvedReq) {
+      const assignedProfName = (approvedReq as ServiceRequest).assignedProfessional;
+      const prof = assignedProfName 
+        ? professionals.find(p => p.fullName === assignedProfName || p.id === assignedProfName) 
+        : undefined;
+      notificationService.notifyQuoteApproved(approvedReq, prof?.phone);
+      showToast(`Orçamento aprovado! Administrador (${ADMIN_WHATSAPP_FORMATTED}) e prestador notificados via WhatsApp.`, 'success');
     }
   };
 

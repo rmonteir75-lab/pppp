@@ -19,7 +19,11 @@ export interface NotificationLogItem {
   whatsappUrlAdmin: string;
   whatsappUrlAdminBackup?: string;
   whatsappUrlClient?: string;
+  whatsappUrlProfessional?: string;
   mailtoUrlAdmin: string;
+  messageContentAdmin?: string;
+  messageContentClient?: string;
+  messageContentProfessional?: string;
   timestamp: string;
   status: 'disparado' | 'registrado';
   requestId?: string;
@@ -31,6 +35,30 @@ export const ADMIN_WHATSAPP_FORMATTED = '(12) 99160-1322';
 export const ADMIN_WHATSAPP_BACKUP = '5512992555104'; // (12) 99255-5104 WhatsApp Backup
 export const ADMIN_WHATSAPP_BACKUP_FORMATTED = '(12) 99255-5104';
 export const ADMIN_WHATSAPP_SECONDARY = '5512992555104'; // compatibilidade
+
+/**
+ * Normaliza e gera URL correta para o WhatsApp, evitando duplicação do DDI 55
+ * e tratando adequadamente números brasileiros de 10 ou 11 dígitos (inclusive DDD 55).
+ */
+export function formatWhatsAppUrl(phone: string, message?: string): string {
+  if (!phone) return '';
+  const clean = phone.replace(/\D/g, '');
+  if (!clean) return '';
+
+  let fullNumber = clean;
+  // Se tem 12 ou 13 dígitos e começa com 55 (ex: 5512991601322), já possui DDI do Brasil
+  if ((clean.length === 12 || clean.length === 13) && clean.startsWith('55')) {
+    fullNumber = clean;
+  } else if (clean.length > 11 && clean.startsWith('55')) {
+    fullNumber = clean;
+  } else {
+    // 10 ou 11 dígitos (DDD + 8 ou 9 dígitos) -> adiciona DDI 55
+    fullNumber = `55${clean}`;
+  }
+
+  const base = `https://wa.me/${fullNumber}`;
+  return message ? `${base}?text=${encodeURIComponent(message)}` : base;
+}
 
 class NotificationService {
   private storageKey = 'smexpress_notifications_log';
@@ -79,11 +107,9 @@ class NotificationService {
   /**
    * 1. NOTIFICAÇÃO: NOVA SOLICITAÇÃO DE ORÇAMENTO
    * Enviado ao WhatsApp e E-mail do Administrador Cadastrado (suportesmservicos@gmail.com)
-   * e também WhatsApp de boas-vindas ao Cliente.
+   * e também WhatsApp de confirmação ao Cliente.
    */
   public notifyNewRequest(req: ServiceRequest): NotificationLogItem {
-    const cleanClientPhone = this.cleanPhone(req.clientPhone || '');
-    const clientPhoneWithDdi = cleanClientPhone.startsWith('55') ? cleanClientPhone : `55${cleanClientPhone}`;
     const formattedAddress = [req.street, req.number, req.neighborhood, req.city, req.state].filter(Boolean).join(', ');
 
     // 1. Mensagem para o WhatsApp do Administrador
@@ -119,7 +145,7 @@ Nossa equipe administrativa e nossos profissionais credenciados já estão anali
 
 Muito obrigado por escolher a SM Express!`;
 
-    const clientWhatsAppUrl = cleanClientPhone ? `https://wa.me/${clientPhoneWithDdi}?text=${encodeURIComponent(clientMessage)}` : undefined;
+    const clientWhatsAppUrl = req.clientPhone ? formatWhatsAppUrl(req.clientPhone, clientMessage) : undefined;
 
     // 3. Link de E-mail para o Administrador (suportesmservicos@gmail.com)
     const emailSubject = `[SM Express] Nova Solicitação de Orçamento: #${req.id} - ${req.serviceTitle} (${req.clientName})`;
@@ -161,6 +187,8 @@ https://wa.me/${ADMIN_WHATSAPP}`;
       whatsappUrlAdminBackup: adminWhatsAppBackupUrl,
       whatsappUrlClient: clientWhatsAppUrl,
       mailtoUrlAdmin: mailtoUrl,
+      messageContentAdmin: adminMessage,
+      messageContentClient: clientMessage,
       timestamp: new Date().toISOString(),
       status: 'disparado',
       requestId: req.id
@@ -181,9 +209,6 @@ https://wa.me/${ADMIN_WHATSAPP}`;
     notes: string,
     scheduledDate?: string
   ): NotificationLogItem {
-    const cleanClientPhone = this.cleanPhone(req.clientPhone || '');
-    const clientPhoneWithDdi = cleanClientPhone.startsWith('55') ? cleanClientPhone : `55${cleanClientPhone}`;
-
     // 1. Mensagem de WhatsApp para o Cliente com a proposta
     const clientMessage = 
 `💰 *ORÇAMENTO PRONTO - SM EXPRESS*
@@ -198,7 +223,7 @@ ${notes ? `📝 *Observações:* ${notes}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 Para aprovar e garantir o agendamento, responda a esta mensagem ou aprove diretamente pelo aplicativo da SM Express!`;
 
-    const clientWhatsAppUrl = cleanClientPhone ? `https://wa.me/${clientPhoneWithDdi}?text=${encodeURIComponent(clientMessage)}` : undefined;
+    const clientWhatsAppUrl = req.clientPhone ? formatWhatsAppUrl(req.clientPhone, clientMessage) : undefined;
 
     // 2. Mensagem de WhatsApp para o Administrador
     const adminMessage = 
@@ -246,6 +271,8 @@ Notificação via WhatsApp enviada ao cliente.`;
       whatsappUrlAdminBackup: adminWhatsAppBackupUrl,
       whatsappUrlClient: clientWhatsAppUrl,
       mailtoUrlAdmin: mailtoUrl,
+      messageContentAdmin: adminMessage,
+      messageContentClient: clientMessage,
       timestamp: new Date().toISOString(),
       status: 'disparado',
       requestId: req.id
@@ -260,8 +287,6 @@ Notificação via WhatsApp enviada ao cliente.`;
    */
   public notifyQuoteApproved(req: ServiceRequest, profPhone?: string): NotificationLogItem {
     const commissionVal = (req.quotedPrice || 0) * 0.30;
-    const cleanProfPhone = profPhone ? this.cleanPhone(profPhone) : '';
-    const profPhoneWithDdi = cleanProfPhone.startsWith('55') ? cleanProfPhone : `55${cleanProfPhone}`;
 
     // 1. Mensagem para o Administrador
     const adminMessage = 
@@ -293,7 +318,7 @@ Data: ${req.scheduledDate || req.desiredDate}
 
 Favor entrar em contato com o cliente para confirmação final.`;
 
-    const profWhatsAppUrl = cleanProfPhone ? `https://wa.me/${profPhoneWithDdi}?text=${encodeURIComponent(profMessage)}` : undefined;
+    const profWhatsAppUrl = profPhone ? formatWhatsAppUrl(profPhone, profMessage) : undefined;
 
     // 3. E-mail para o Administrador (suportesmservicos@gmail.com)
     const emailSubject = `[SM Express] ★ ORÇAMENTO APROVADO: #${req.id} - ${req.clientName} (R$ ${(req.quotedPrice || 0).toFixed(2)})`;
@@ -328,8 +353,11 @@ Cobrança de comissão (30%) lançada com vencimento em 3 dias úteis.`;
       professionalWhatsApp: profPhone,
       whatsappUrlAdmin: adminWhatsAppUrl,
       whatsappUrlAdminBackup: adminWhatsAppBackupUrl,
-      whatsappUrlClient: profWhatsAppUrl,
+      whatsappUrlClient: req.clientPhone ? formatWhatsAppUrl(req.clientPhone, `Olá ${req.clientName}! Recebemos a aprovação do seu orçamento para o pedido #${req.id} (${req.serviceTitle}). O profissional ${req.assignedProfessional || 'credenciado'} foi notificado!`) : undefined,
+      whatsappUrlProfessional: profWhatsAppUrl,
       mailtoUrlAdmin: mailtoUrl,
+      messageContentAdmin: adminMessage,
+      messageContentProfessional: profMessage,
       timestamp: new Date().toISOString(),
       status: 'disparado',
       requestId: req.id
@@ -368,6 +396,29 @@ Data: ${new Date().toLocaleString('pt-BR')}
     const adminWhatsAppUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(adminMessage)}`;
     const adminWhatsAppBackupUrl = `https://wa.me/${ADMIN_WHATSAPP_BACKUP}?text=${encodeURIComponent(adminMessage)}`;
 
+    // Mensagem de WhatsApp para o Cliente sobre o novo status
+    let clientStatusMsg = '';
+    if (newStatus === 'em_execucao') {
+      clientStatusMsg = 
+`🔨 *SERVIÇO EM EXECUÇÃO - SM EXPRESS*
+Olá *${req.clientName}*! Seu pedido *${req.id}* (*${req.serviceTitle}*) com o profissional *${req.assignedProfessional || 'credenciado'}* está em execução. Qualquer dúvida, conte com a SM Express no WhatsApp ${ADMIN_WHATSAPP_FORMATTED}.`;
+    } else if (newStatus === 'concluido') {
+      clientStatusMsg = 
+`✅ *SERVIÇO CONCLUÍDO - SM EXPRESS*
+Olá *${req.clientName}*! Seu pedido *${req.id}* (*${req.serviceTitle}*) foi concluído pelo profissional *${req.assignedProfessional || 'credenciado'}*.
+Por favor, acesse o aplicativo SM Express para conferir os detalhes e avaliar o atendimento recebido. Muito obrigado!`;
+    } else if (newStatus === 'cancelado') {
+      clientStatusMsg = 
+`⚠️ *ATUALIZAÇÃO DO PEDIDO - SM EXPRESS*
+Olá *${req.clientName}*! O pedido *${req.id}* (*${req.serviceTitle}*) teve o status alterado para cancelado. Para dúvidas ou reativação, contate o suporte no WhatsApp ${ADMIN_WHATSAPP_FORMATTED}.`;
+    } else {
+      clientStatusMsg = 
+`📢 *ATUALIZAÇÃO DE PEDIDO - SM EXPRESS*
+Olá *${req.clientName}*! O status do seu pedido *${req.id}* (*${req.serviceTitle}*) foi atualizado para: *${statusLabel}*.`;
+    }
+
+    const clientWhatsAppUrl = req.clientPhone ? formatWhatsAppUrl(req.clientPhone, clientStatusMsg) : undefined;
+
     // E-mail para o Administrador
     const emailSubject = `[SM Express] Movimentação no Pedido #${req.id}: Status -> ${statusLabel}`;
     const emailBody = 
@@ -395,7 +446,10 @@ Acompanhe os detalhes no Painel Administrativo.`;
       clientWhatsApp: req.clientPhone,
       whatsappUrlAdmin: adminWhatsAppUrl,
       whatsappUrlAdminBackup: adminWhatsAppBackupUrl,
+      whatsappUrlClient: clientWhatsAppUrl,
       mailtoUrlAdmin: mailtoUrl,
+      messageContentAdmin: adminMessage,
+      messageContentClient: clientStatusMsg,
       timestamp: new Date().toISOString(),
       status: 'disparado',
       requestId: req.id
@@ -425,6 +479,14 @@ Acesse a aba 'Prestadores' no Painel Administrativo para auditar documentos e ap
     const adminWhatsAppUrl = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(adminMessage)}`;
     const adminWhatsAppBackupUrl = `https://wa.me/${ADMIN_WHATSAPP_BACKUP}?text=${encodeURIComponent(adminMessage)}`;
 
+    // Mensagem de Boas-Vindas para o WhatsApp do Prestador
+    const profWelcomeMessage = 
+`👋 Olá *${prof.fullName}*!
+Seja muito bem-vindo à rede de profissionais credenciados da *SM Express*!
+Recebemos seu cadastro com sucesso. Nossa diretoria administrativa (${ADMIN_EMAIL} / ${ADMIN_WHATSAPP_FORMATTED}) está validando suas informações para liberação de acesso às demandas da sua região.`;
+
+    const profWhatsAppUrl = prof.phone ? formatWhatsAppUrl(prof.phone, profWelcomeMessage) : undefined;
+
     const emailSubject = `[SM Express] Novo Prestador Cadastrado: ${prof.fullName} (${prof.city})`;
     const emailBody = 
 `NOVO CADASTRO DE PRESTADOR RECEBIDO
@@ -452,7 +514,10 @@ Acesse o Painel Administrativo para aprovar o cadastro e liberar o mural de dema
       professionalWhatsApp: prof.phone,
       whatsappUrlAdmin: adminWhatsAppUrl,
       whatsappUrlAdminBackup: adminWhatsAppBackupUrl,
+      whatsappUrlProfessional: profWhatsAppUrl,
       mailtoUrlAdmin: mailtoUrl,
+      messageContentAdmin: adminMessage,
+      messageContentProfessional: profWelcomeMessage,
       timestamp: new Date().toISOString(),
       status: 'disparado'
     };
@@ -508,6 +573,7 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
       whatsappUrlAdmin: adminWhatsAppUrl,
       whatsappUrlAdminBackup: adminWhatsAppBackupUrl,
       mailtoUrlAdmin: mailtoUrl,
+      messageContentAdmin: adminMessage,
       timestamp: new Date().toISOString(),
       status: 'disparado',
       requestId: req.id

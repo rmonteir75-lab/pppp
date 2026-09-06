@@ -17,7 +17,7 @@ export const INITIAL_USERS: UserAccount[] = [
     email: 'suportesmservicos@gmail.com',
     phone: '(12) 99160-1322',
     role: 'admin',
-    password: 'Rmonte14*',
+    password: '2026Smexpress*',
     cpfCnpj: '54.892.311/0001-90',
     rg: '',
     birthDate: '1980-01-01',
