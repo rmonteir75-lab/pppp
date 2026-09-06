@@ -35,6 +35,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { UserAccount, UserRole } from '../types';
+import { compressImage } from '../utils/storage';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -251,7 +252,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [currentUser]);
 
   // Handle Photo 3x4 Upload for Register
-  const handleRegPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRegPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -260,18 +261,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setRegPhoto3x4(event.target.result as string);
+    try {
+      const compressed = await compressImage(file, 400, 400, 0.65);
+      if (compressed) {
+        setRegPhoto3x4(compressed);
         setRegPhoto3x4Name(file.name);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setRegPhoto3x4(event.target.result as string);
+          setRegPhoto3x4Name(file.name);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Handle Photo 3x4 Upload for Edit Profile
-  const handleEditPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -279,13 +288,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setEditAvatarUrl(event.target.result as string);
+    try {
+      const compressed = await compressImage(file, 400, 400, 0.65);
+      if (compressed) {
+        setEditAvatarUrl(compressed);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setEditAvatarUrl(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Format Helper Functions
@@ -345,13 +361,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Quick Master Admin Login
   const handleQuickMasterAdminLogin = () => {
     setAdminError('');
-    let adminUser = users.find(u => u.email.toLowerCase() === 'rmonteir75@gmail.com');
+    let adminUser = users.find(u => u.email.toLowerCase() === 'suportesmservicos@gmail.com' || u.email.toLowerCase() === 'rmonteir75@gmail.com');
     if (!adminUser) {
       adminUser = users.find(u => u.role === 'admin');
     }
     
     if (adminUser) {
-      const updated = { ...adminUser, lastAccess: new Date().toISOString() };
+      const updated = { 
+        ...adminUser, 
+        email: 'suportesmservicos@gmail.com', // Garantir e-mail oficial atualizado
+        lastAccess: new Date().toISOString() 
+      };
       if (onUpdateUser) onUpdateUser(updated);
       setAdminSuccess('Acesso ADM Master autorizado com sucesso! Redirecionando...');
       setTimeout(() => {
@@ -363,8 +383,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const fallbackAdmin: UserAccount = {
         id: 'USR-ADM-001',
         name: 'Administrador SM Express',
-        email: 'rmonteir75@gmail.com',
-        phone: '(12) 99255-5104',
+        email: 'suportesmservicos@gmail.com',
+        phone: '(12) 99160-1322',
         role: 'admin',
         password: 'Rmonte14*',
         cpfCnpj: '54.892.311/0001-90',
@@ -402,12 +422,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     let foundAdmin = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     // Fallback if master admin is logging in but not yet in state
-    if (!foundAdmin && cleanEmail === 'rmonteir75@gmail.com' && adminPassword === 'Rmonte14*') {
+    if (!foundAdmin && (cleanEmail === 'suportesmservicos@gmail.com' || cleanEmail === 'rmonteir75@gmail.com') && adminPassword === 'Rmonte14*') {
       const defaultMaster: UserAccount = {
         id: 'USR-ADM-001',
         name: 'Administrador SM Express',
-        email: 'rmonteir75@gmail.com',
-        phone: '(12) 99255-5104',
+        email: 'suportesmservicos@gmail.com',
+        phone: '(12) 99160-1322',
         role: 'admin',
         password: 'Rmonte14*',
         cpfCnpj: '54.892.311/0001-90',
@@ -1450,7 +1470,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
-                      placeholder="rmonteir75@gmail.com"
+                      placeholder="suportesmservicos@gmail.com"
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
                     />
                   </div>

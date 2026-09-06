@@ -54,16 +54,16 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
           </div>
 
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
-              Área Restrita & Individual
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/30">
+              0 Pedidos Disponíveis • Acesso Não Conectado
             </span>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-1">
-              Acompanhamento Seguro de Pedidos
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-2">
+              Nenhum Pedido Disponível sem Login
             </h2>
           </div>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-            Para garantir a privacidade e segurança dos seus dados, o histórico de solicitações, orçamentos recebidos e acompanhamento de execução só ficam visíveis para a sua conta.
+            Por privacidade e sigilo de dados, nenhum orçamento ou pedido fica exposto para visitantes desconectados. Acesse sua conta ou faça seu cadastro para visualizar seus orçamentos e acompanhar o status dos seus serviços.
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -93,17 +93,48 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
     );
   }
 
-  // Filter requests strictly for this user (or show all if admin)
-  const userRequests = currentUser.role === 'admin'
-    ? requests
-    : requests.filter(r => {
-        const cleanUserPhone = currentUser.phone?.replace(/\D/g, '') || '';
-        const cleanReqPhone = r.clientPhone?.replace(/\D/g, '') || '';
-        const emailMatch = r.clientEmail && currentUser.email && r.clientEmail.toLowerCase() === currentUser.email.toLowerCase();
-        const phoneMatch = cleanUserPhone && cleanReqPhone && (cleanUserPhone === cleanReqPhone || cleanReqPhone.includes(cleanUserPhone) || cleanUserPhone.includes(cleanReqPhone));
-        const nameMatch = r.clientName && currentUser.name && r.clientName.toLowerCase() === currentUser.name.toLowerCase();
-        return emailMatch || phoneMatch || nameMatch;
-      });
+  // Filter requests strictly for this logged-in user ONLY!
+  // No matter the user's role (admin, client, or professional), "Meus Pedidos" must strictly display only orders belonging to this logged-in account.
+  const userRequests = requests.filter(r => {
+    if (!currentUser) return false;
+
+    // 1. Match by explicit userId
+    if (r.userId && currentUser.id && r.userId === currentUser.id) {
+      return true;
+    }
+
+    // 2. Match by email (case-insensitive)
+    const cleanUserEmail = currentUser.email?.trim().toLowerCase();
+    const cleanReqEmail = r.clientEmail?.trim().toLowerCase();
+    if (cleanUserEmail && cleanReqEmail && cleanUserEmail === cleanReqEmail) {
+      return true;
+    }
+
+    // 3. Match by phone digits (at least 8 digits)
+    const cleanUserPhone = currentUser.phone?.replace(/\D/g, '') || '';
+    const cleanReqPhone = r.clientPhone?.replace(/\D/g, '') || '';
+    if (cleanUserPhone.length >= 8 && cleanReqPhone.length >= 8) {
+      if (cleanUserPhone === cleanReqPhone) return true;
+      if (cleanUserPhone.endsWith(cleanReqPhone) || cleanReqPhone.endsWith(cleanUserPhone)) {
+        return true;
+      }
+    }
+
+    // 4. Match by exact full client name if specific
+    const cleanUserName = currentUser.name?.trim().toLowerCase();
+    const cleanReqName = r.clientName?.trim().toLowerCase();
+    if (
+      cleanUserName && 
+      cleanReqName && 
+      cleanUserName.length >= 4 && 
+      cleanUserName !== 'cliente' && 
+      cleanReqName === cleanUserName
+    ) {
+      return true;
+    }
+
+    return false;
+  });
 
   const getStatusBadge = (status: ServiceRequest['status']) => {
     switch (status) {
@@ -177,7 +208,13 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
             Acompanhamento dos Meus Pedidos
           </h2>
+          <p className="text-xs text-slate-300 mt-0.5">
+            Exibindo somente os pedidos vinculados à sua conta: <strong className="text-amber-400">{currentUser.name}</strong> ({currentUser.email || currentUser.phone})
+          </p>
         </div>
+        <span className="px-3 py-1 bg-amber-400 text-slate-950 font-black text-xs rounded-full shadow-xs">
+          {userRequests.length} {userRequests.length === 1 ? 'Pedido do seu login' : 'Pedidos do seu login'}
+        </span>
       </div>
 
       {/* Orders List */}
@@ -186,9 +223,11 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto">
             <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
-          <h3 className="text-lg sm:text-xl font-black text-[#001838]">Você ainda não tem solicitações</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Escolha um dos nossos serviços e solicite um orçamento rápido e sem compromisso.
+          <h3 className="text-lg sm:text-xl font-black text-[#001838]">
+            Nenhum pedido encontrado para o seu login
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Você está conectado como <strong>{currentUser.name}</strong> ({currentUser.email || currentUser.phone}). Nenhuma solicitação foi realizada ainda por esta conta.
           </p>
           <div className="pt-2">
             <button
@@ -421,25 +460,26 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[11px] font-bold text-slate-500 mr-1 hidden xs:inline">Suporte:</span>
                       <a
-                        href={`https://wa.me/5512992555104?text=Ol%C3%A1,%20gostaria%20de%20informa%C3%A7%C3%B5es%20sobre%20o%20meu%20pedido%20${encodeURIComponent(req.id)}%20(${encodeURIComponent(req.serviceTitle)}).`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-xl border border-emerald-300 transition-colors touch-target justify-center"
-                        title="Atendimento via WhatsApp (12) 99255-5104"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                        <span>(12) 99255-5104</span>
-                      </a>
-
-                      <a
                         href={`https://wa.me/5512991601322?text=Ol%C3%A1,%20gostaria%20de%20informa%C3%A7%C3%B5es%20sobre%20o%20meu%20pedido%20${encodeURIComponent(req.id)}%20(${encodeURIComponent(req.serviceTitle)}).`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-xl border border-emerald-300 transition-colors touch-target justify-center"
-                        title="Atendimento via WhatsApp (12) 99160-1322"
+                        title="WhatsApp Oficial do Administrador: (12) 99160-1322"
                       >
                         <MessageCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                         <span>(12) 99160-1322</span>
+                        <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1 rounded font-bold">Oficial</span>
+                      </a>
+
+                      <a
+                        href={`https://wa.me/5512992555104?text=Ol%C3%A1,%20gostaria%20de%20informa%C3%A7%C3%B5es%20sobre%20o%20meu%20pedido%20${encodeURIComponent(req.id)}%20(${encodeURIComponent(req.serviceTitle)}).`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl border border-slate-300 transition-colors touch-target justify-center"
+                        title="WhatsApp Backup: (12) 99255-5104"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                        <span>(12) 99255-5104</span>
                       </a>
                     </div>
 

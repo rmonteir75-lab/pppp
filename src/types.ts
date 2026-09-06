@@ -42,6 +42,7 @@ export type RequestStatus =
 
 export interface ServiceRequest {
   id: string;
+  userId?: string;
   serviceId: ServiceCategory;
   serviceTitle: string;
   clientName: string;

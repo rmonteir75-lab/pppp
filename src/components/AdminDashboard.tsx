@@ -1,240 +1,119 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  ServiceRequest, 
-  AdminMetrics, 
-  ProfessionalProfile, 
   UserAccount, 
   UserRole, 
   UserAccountStatus,
+  ServiceRequest,
+  ProfessionalProfile,
   CommissionCharge,
-  PaymentGatewaySettings,
-  PaymentMethod,
-  PaymentStatus,
   ServiceDefinition
 } from '../types';
-import { DEFAULT_PAYMENT_GATEWAY_SETTINGS } from '../data/mockData';
-import { ServiceIcon } from './ServiceIcon';
+import { compressImage } from '../utils/storage';
+import { AdminReportsCenter } from './AdminReportsCenter';
+import { AdminNotificationCenter } from './AdminNotificationCenter';
 import { 
-  BarChart3, 
-  TrendingUp, 
-  Clock, 
-  Calendar, 
-  DollarSign, 
-  CheckCircle2, 
+  ShieldCheck, 
   User, 
-  Send, 
-  Star, 
+  Users,
+  CheckCircle2, 
+  UserPlus, 
+  Search, 
+  Filter, 
+  Eye, 
+  Edit3, 
+  Trash2, 
+  Lock, 
+  Unlock, 
+  Download, 
+  AlertTriangle, 
+  Mail, 
   Phone, 
   MapPin, 
-  Building2,
-  FileText,
-  Users,
-  ShieldCheck,
-  Check,
-  X,
-  UserPlus,
-  Search,
-  Filter,
-  Eye,
-  Edit3,
-  Trash2,
-  Lock,
-  Unlock,
-  Download,
-  AlertTriangle,
-  Mail,
-  Home,
-  Briefcase,
-  CheckCircle,
-  ExternalLink,
+  FileText, 
+  Key, 
+  Save, 
+  Camera, 
+  Upload, 
+  X, 
   MessageCircle,
-  Save,
-  Camera,
-  Upload,
+  ShieldAlert,
+  Fingerprint,
+  FileSpreadsheet,
   FileCheck,
-  ArrowRight,
-  Scale,
-  FileCheck2,
-  CreditCard,
-  Ban,
-  RotateCcw,
-  Target,
-  Layers,
-  CalendarDays
+  DollarSign,
+  Sparkles
 } from 'lucide-react';
-import { DigitalContractModal } from './DigitalContractModal';
-import { PaymentPlatformView } from './PaymentPlatformView';
-import { SMExpressLogo } from './SMExpressLogo';
-import { SalesFunnelCRM } from './SalesFunnelCRM';
-import { ServiceAgendaCalendar } from './ServiceAgendaCalendar';
-import { CompanyManagementPanel } from './CompanyManagementPanel';
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  PieChart, 
-  Pie, 
-  Cell 
-} from 'recharts';
 
 interface AdminDashboardProps {
-  requests: ServiceRequest[];
-  metrics: AdminMetrics;
-  professionals?: ProfessionalProfile[];
+  requests?: ServiceRequest[];
   users?: UserAccount[];
-  charges?: CommissionCharge[];
-  gatewaySettings?: PaymentGatewaySettings;
-  services?: ServiceDefinition[];
   currentUser?: UserAccount | null;
   onOpenAuth?: (mode?: 'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access') => void;
-  onSendQuote: (requestId: string, price: number, hours: string, prof: string, notes: string) => void;
-  onUpdateStatus: (requestId: string, status: ServiceRequest['status']) => void;
-  onApproveProfessional?: (profId: string) => void;
-  onDeleteProfessional?: (profId: string) => void;
   onUpdateUser?: (updatedUser: UserAccount) => void;
   onAddUser?: (newUser: UserAccount) => void;
   onDeleteUser?: (userId: string) => void;
-  onDeleteRequest?: (requestId: string) => void;
-  onUpdateChargeStatus?: (chargeId: string, status: PaymentStatus, method?: PaymentMethod) => void;
-  onIssueBoletoAndNfse?: (chargeId: string) => void;
-  onSaveGatewaySettings?: (settings: PaymentGatewaySettings) => void;
-  onDeleteService?: (serviceId: string) => void;
-  onResetServices?: () => void;
-  onPurgeAllData?: () => void;
+  // Kept for backward compatibility with App.tsx
+  metrics?: any;
+  professionals?: ProfessionalProfile[];
+  charges?: CommissionCharge[];
+  gatewaySettings?: any;
+  services?: ServiceDefinition[];
+  onSendQuote?: any;
+  onUpdateStatus?: any;
+  onApproveProfessional?: any;
+  onDeleteProfessional?: any;
+  onDeleteRequest?: any;
+  onUpdateChargeStatus?: any;
+  onIssueBoletoAndNfse?: any;
+  onSaveGatewaySettings?: any;
+  onDeleteService?: any;
+  onResetServices?: any;
+  onPurgeAllData?: any;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  requests,
-  metrics,
-  professionals = [],
   users = [],
-  charges: initialCharges,
-  gatewaySettings: initialGatewaySettings,
-  services = [],
   currentUser,
+  requests = [],
+  professionals = [],
+  charges = [],
+  services = [],
   onOpenAuth,
-  onSendQuote,
-  onUpdateStatus,
-  onApproveProfessional,
-  onDeleteProfessional,
   onUpdateUser,
   onAddUser,
   onDeleteUser,
-  onDeleteRequest,
-  onUpdateChargeStatus,
-  onIssueBoletoAndNfse,
-  onSaveGatewaySettings,
-  onDeleteService,
-  onResetServices,
-  onPurgeAllData
+  onPurgeAllData,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'funnel' | 'schedule' | 'company' | 'requests' | 'reviews' | 'professionals' | 'users' | 'payments' | 'services'>('overview');
-  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
-  const [serviceToDelete, setServiceToDelete] = useState<ServiceDefinition | null>(null);
+  // Admin Main Navigation Section: 'relatorios' | 'usuarios' | 'notificacoes'
+  const [adminTab, setAdminTab] = useState<'relatorios' | 'usuarios' | 'notificacoes'>('relatorios');
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
-  
-  // Commission & Payment State
-  const [commissionCharges, setCommissionCharges] = useState<CommissionCharge[]>(() => {
-    return initialCharges || [];
-  });
 
-  const [currentGatewaySettings, setCurrentGatewaySettings] = useState<PaymentGatewaySettings>(() => {
-    return initialGatewaySettings || DEFAULT_PAYMENT_GATEWAY_SETTINGS;
-  });
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'todos' | UserRole>('todos');
+  const [statusFilter, setStatusFilter] = useState<'todos' | UserAccountStatus>('todos');
+  const [completenessFilter, setCompletenessFilter] = useState<'todos' | 'completo' | 'incompleto'>('todos');
 
-  // Sync props when they change
-  useEffect(() => {
-    if (initialCharges) {
-      setCommissionCharges(initialCharges);
-    }
-  }, [initialCharges]);
-
-  useEffect(() => {
-    if (initialGatewaySettings) {
-      setCurrentGatewaySettings(initialGatewaySettings);
-    }
-  }, [initialGatewaySettings]);
-
-  // Dynamic Chart Data from real requests
-  const monthlyChartData = useMemo(() => {
-    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const currentMonthIdx = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const result = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(currentYear, currentMonthIdx - i, 1);
-      const mIdx = d.getMonth();
-      const yr = d.getFullYear();
-      const mLabel = monthNames[mIdx];
-      const count = requests.filter(r => {
-        if (!r.createdAt) return false;
-        const rd = new Date(r.createdAt);
-        return rd.getMonth() === mIdx && rd.getFullYear() === yr;
-      }).length;
-      result.push({ period: mLabel, solicitacoes: count });
-    }
-    return result;
-  }, [requests]);
-
-  const serviceDistributionData = useMemo(() => {
-    if (requests.length === 0) return [];
-    const counts: Record<string, number> = {};
-    requests.forEach(r => {
-      const title = r.serviceTitle || 'Outros Serviços';
-      counts[title] = (counts[title] || 0) + 1;
-    });
-    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B'];
-    const total = requests.length;
-    return Object.entries(counts).map(([name, count], idx) => ({
-      name,
-      value: Math.round((count / total) * 100),
-      color: colors[idx % colors.length]
-    }));
-  }, [requests]);
-
-  // Professional Management & Deletion State
-  const [profSearchTerm, setProfSearchTerm] = useState('');
-  const [profStatusFilter, setProfStatusFilter] = useState<'todos' | 'aprovado' | 'pendente_aprovacao'>('todos');
-  const [profToDelete, setProfToDelete] = useState<ProfessionalProfile | null>(null);
-  const [profSuccessMessage, setProfSuccessMessage] = useState('');
-  
-  // Quote form state for selected request
-  const [selectedReqForQuote, setSelectedReqForQuote] = useState<ServiceRequest | null>(null);
-  const [quotePrice, setQuotePrice] = useState<number>(0);
-  const [quoteHours, setQuoteHours] = useState<string>('2h');
-  const [quoteProf, setQuoteProf] = useState<string>('');
-  const [quoteNotes, setQuoteNotes] = useState<string>('');
-
-  // User Management State
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<'todos' | UserRole>('todos');
-  const [userStatusFilter, setUserStatusFilter] = useState<'todos' | UserAccountStatus>('todos');
-  const [userCompletenessFilter, setUserCompletenessFilter] = useState<'todos' | 'completo' | 'incompleto'>('todos');
-
-  // Modals for User Management
+  // Modals State
   const [selectedUserForView, setSelectedUserForView] = useState<UserAccount | null>(null);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserAccount | null>(null);
   const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserAccount | null>(null);
-  const [userSuccessMessage, setUserSuccessMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showPasswordMap, setShowPasswordMap] = useState<Record<string, boolean>>({});
 
-  // Digital Contract Modal for Admin Inspection
-  const [contractModalProf, setContractModalProf] = useState<ProfessionalProfile | null>(null);
-
-  // Form State for Adding / Editing User
+  // Form State for Adding / Editing User Login
   const [formUserId, setFormUserId] = useState('');
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('cliente');
   const [formStatus, setFormStatus] = useState<UserAccountStatus>('ativo');
+  const [formPassword, setFormPassword] = useState('');
   const [formCpf, setFormCpf] = useState('');
   const [formRg, setFormRg] = useState('');
   const [formBirthDate, setFormBirthDate] = useState('');
-  const [formCep, setFormCep] = useState('');
+  const [formCep, setFormCep] = useState('12000-000');
   const [formStreet, setFormStreet] = useState('');
   const [formNumber, setFormNumber] = useState('');
   const [formComplement, setFormComplement] = useState('');
@@ -242,7 +121,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [formCity, setFormCity] = useState('Taubaté');
   const [formState, setFormState] = useState('SP');
   const [formNotes, setFormNotes] = useState('');
-  const [formPassword, setFormPassword] = useState('');
   const [formPhoto3x4, setFormPhoto3x4] = useState<string>('');
   const formPhotoInputRef = React.useRef<HTMLInputElement>(null);
   const [isFormCepLoading, setIsFormCepLoading] = useState(false);
@@ -284,32 +162,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleFormPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFormPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setFormPhoto3x4(event.target.result as string);
+    try {
+      const compressed = await compressImage(file, 400, 400, 0.65);
+      if (compressed) {
+        setFormPhoto3x4(compressed);
       }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleOpenQuoteForm = (req: ServiceRequest) => {
-    setSelectedReqForQuote(req);
-    setQuotePrice(req.quotedPrice || 150);
-    setQuoteHours(req.estimatedHours || '2h');
-    setQuoteProf(req.assignedProfessional || (professionals.length > 0 ? professionals[0].fullName : 'Profissional SM'));
-    setQuoteNotes(req.adminNotes || '');
-  };
-
-  const handleSubmitQuote = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedReqForQuote) {
-      onSendQuote(selectedReqForQuote.id, quotePrice, quoteHours, quoteProf, quoteNotes);
-      setSelectedReqForQuote(null);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setFormPhoto3x4(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -343,6 +212,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setFormPhone('');
     setFormRole('cliente');
     setFormStatus('ativo');
+    setFormPassword('');
     setFormCpf('');
     setFormRg('');
     setFormBirthDate('');
@@ -354,8 +224,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setFormCity('Taubaté');
     setFormState('SP');
     setFormNotes('');
-    setFormPassword('123456');
     setFormPhoto3x4('');
+    setFormCepMessage(null);
     setIsNewUserModalOpen(true);
   };
 
@@ -363,15 +233,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleOpenEditUser = (u: UserAccount) => {
     setSelectedUserForEdit(u);
     setFormUserId(u.id);
-    setFormName(u.name);
-    setFormEmail(u.email);
+    setFormName(u.name || '');
+    setFormEmail(u.email || '');
     setFormPhone(u.phone || '');
-    setFormRole(u.role);
+    setFormRole(u.role || 'cliente');
     setFormStatus(u.status || 'ativo');
+    setFormPassword(u.password || '');
     setFormCpf(u.cpfCnpj || '');
     setFormRg(u.rg || '');
     setFormBirthDate(u.birthDate || '');
-    setFormCep(u.cep || '');
+    setFormCep(u.cep || '12000-000');
     setFormStreet(u.street || '');
     setFormNumber(u.number || '');
     setFormComplement(u.complement || '');
@@ -379,22 +250,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setFormCity(u.city || 'Taubaté');
     setFormState(u.state || 'SP');
     setFormNotes(u.notes || '');
-    setFormPassword(u.password || '');
     setFormPhoto3x4(u.photo3x4Url || u.avatarUrl || '');
+    setFormCepMessage(null);
   };
 
   // Save New User
   const handleSaveNewUser = (e: React.FormEvent) => {
     e.preventDefault();
-    const isComplete = Boolean(formCpf && formPhone && formStreet && formCity);
-    
+    if (!formName || !formEmail) return;
+
+    const isComplete = Boolean(
+      formName &&
+      formEmail &&
+      formPhone &&
+      formCpf &&
+      formStreet &&
+      formNumber &&
+      formCity
+    );
+
     const newUser: UserAccount = {
-      id: formUserId,
+      id: formUserId || `USR-${Math.floor(1000 + Math.random() * 9000)}`,
       name: formName,
-      email: formEmail,
+      email: formEmail.toLowerCase().trim(),
       phone: formPhone,
       role: formRole,
       status: formStatus,
+      password: formPassword || '123456',
       cpfCnpj: formCpf,
       rg: formRg,
       birthDate: formBirthDate,
@@ -406,21 +288,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       city: formCity,
       state: formState,
       notes: formNotes,
-      password: formPassword,
-      isCompleteRegistration: isComplete,
-      totalRequests: 0,
-      totalSpent: 0,
       createdAt: new Date().toISOString(),
-      avatarUrl: formPhoto3x4 || '',
-      photo3x4Url: formPhoto3x4 || ''
+      isCompleteRegistration: isComplete,
+      avatarUrl: formPhoto3x4 || undefined,
+      photo3x4Url: formPhoto3x4 || undefined
     };
 
     if (onAddUser) {
       onAddUser(newUser);
     }
     setIsNewUserModalOpen(false);
-    setUserSuccessMessage(`Usuário ${formName} cadastrado com ID de Acesso emitido!`);
-    setTimeout(() => setUserSuccessMessage(''), 4000);
+    setSuccessMessage(`Login e conta de ${formName} criados com sucesso!`);
+    setTimeout(() => setSuccessMessage(''), 4000);
   };
 
   // Save Edited User
@@ -428,15 +307,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!selectedUserForEdit) return;
 
-    const isComplete = Boolean(formCpf && formPhone && formStreet && formCity);
+    const isComplete = Boolean(
+      formName &&
+      formEmail &&
+      formPhone &&
+      formCpf &&
+      formStreet &&
+      formNumber &&
+      formCity
+    );
 
     const updated: UserAccount = {
       ...selectedUserForEdit,
       name: formName,
-      email: formEmail,
+      email: formEmail.toLowerCase().trim(),
       phone: formPhone,
       role: formRole,
       status: formStatus,
+      password: formPassword,
       cpfCnpj: formCpf,
       rg: formRg,
       birthDate: formBirthDate,
@@ -448,7 +336,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       city: formCity,
       state: formState,
       notes: formNotes,
-      password: formPassword,
       isCompleteRegistration: isComplete,
       avatarUrl: formPhoto3x4 || selectedUserForEdit.avatarUrl,
       photo3x4Url: formPhoto3x4 || selectedUserForEdit.photo3x4Url
@@ -458,8 +345,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onUpdateUser(updated);
     }
     setSelectedUserForEdit(null);
-    setUserSuccessMessage(`Cadastro de ${formName} atualizado com sucesso!`);
-    setTimeout(() => setUserSuccessMessage(''), 4000);
+    setSuccessMessage(`Credenciais e dados de ${formName} atualizados com sucesso!`);
+    setTimeout(() => setSuccessMessage(''), 4000);
   };
 
   // Toggle user status (ativo / bloqueado)
@@ -469,108 +356,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (onUpdateUser) {
       onUpdateUser(updated);
     }
-    setUserSuccessMessage(`Status do usuário alterado para ${newStatus === 'ativo' ? 'Ativo' : 'Bloqueado'}.`);
-    setTimeout(() => setUserSuccessMessage(''), 3000);
+    setSuccessMessage(`Status do login de ${u.name} alterado para ${newStatus === 'ativo' ? 'Ativo (Liberado)' : 'Bloqueado (Suspenso)'}.`);
+    setTimeout(() => setSuccessMessage(''), 3000);
   };
 
   // Confirm delete user
   const handleConfirmDelete = () => {
     if (userToDelete && onDeleteUser) {
       onDeleteUser(userToDelete.id);
-      setUserSuccessMessage(`Usuário ${userToDelete.name} removido com sucesso.`);
+      setSuccessMessage(`Conta e login de ${userToDelete.name} removidos com sucesso.`);
       setUserToDelete(null);
-      setTimeout(() => setUserSuccessMessage(''), 3000);
+      setTimeout(() => setSuccessMessage(''), 3000);
     }
   };
-
-  // Confirm delete professional
-  const handleConfirmDeleteProf = () => {
-    if (profToDelete) {
-      if (onDeleteProfessional) {
-        onDeleteProfessional(profToDelete.id);
-      }
-      setProfSuccessMessage(`Profissional ${profToDelete.fullName} (CPF: ${profToDelete.cpfCnpj}) removido com sucesso.`);
-      setProfToDelete(null);
-      setTimeout(() => setProfSuccessMessage(''), 4000);
-    }
-  };
-
-  // Charge status update handler
-  const handleUpdateChargeStatus = (chargeId: string, status: PaymentStatus, method?: PaymentMethod) => {
-    setCommissionCharges(prev => prev.map(c => {
-      if (c.id === chargeId) {
-        return {
-          ...c,
-          status,
-          paymentMethod: method || c.paymentMethod,
-          paidAt: status === 'pago' ? new Date().toISOString() : c.paidAt
-        };
-      }
-      return c;
-    }));
-
-    if (onUpdateChargeStatus) {
-      onUpdateChargeStatus(chargeId, status, method);
-    }
-  };
-
-  // Issue Boleto & NFS-e handler for automated debt collection
-  const handleIssueBoletoAndNfse = (chargeId: string) => {
-    const target = commissionCharges.find(c => c.id === chargeId);
-    if (!target) return;
-
-    const fine = target.commissionValue * 0.02; // 2% multa
-    const interest = target.commissionValue * 0.01; // 1% juros
-    const total = target.commissionValue + fine + interest;
-
-    const updated = commissionCharges.map(c => {
-      if (c.id === chargeId) {
-        return {
-          ...c,
-          status: 'boleto_emitido' as PaymentStatus,
-          lateFeePercent: 2.0,
-          monthlyInterestPercent: 1.0,
-          totalChargedValue: total,
-          boletoLinhaDigitavel: `07790.00116 12849.025008 00000.${c.id.replace(/\D/g, '').padEnd(6, '0')} 8 9580000000${Math.round(total * 100)}`,
-          boletoCodigoBarras: `077989580000000${Math.round(total * 100)}000111284902500000000${c.id.replace(/\D/g, '')}`,
-          nfseNumero: `2026/${Math.floor(100000 + Math.random() * 900000)}`,
-          nfseChaveAcesso: `3526085489231100019056001000000${Math.floor(100000 + Math.random() * 900000)}1098456123`,
-          nfseEmissaoData: new Date().toISOString(),
-          notes: 'Automação de Inadimplência executada: emissão de Boleto Bancário Registrado com encargos e NFS-e de intermediação.'
-        };
-      }
-      return c;
-    });
-
-    setCommissionCharges(updated);
-
-    if (onIssueBoletoAndNfse) {
-      onIssueBoletoAndNfse(chargeId);
-    }
-  };
-
-  // Save Gateway Settings handler
-  const handleSaveGatewaySettings = (settings: PaymentGatewaySettings) => {
-    setCurrentGatewaySettings(settings);
-    if (onSaveGatewaySettings) {
-      onSaveGatewaySettings(settings);
-    }
-  };
-
-  // Filter professionals
-  const filteredProfessionals = professionals.filter(p => {
-    const matchesSearch = 
-      p.fullName.toLowerCase().includes(profSearchTerm.toLowerCase()) ||
-      p.cpfCnpj.includes(profSearchTerm) ||
-      p.phone.includes(profSearchTerm) ||
-      (p.email && p.email.toLowerCase().includes(profSearchTerm.toLowerCase())) ||
-      (p.city && p.city.toLowerCase().includes(profSearchTerm.toLowerCase())) ||
-      (p.categories && p.categories.some(cat => cat.toLowerCase().includes(profSearchTerm.toLowerCase())));
-
-    const matchesStatus = profStatusFilter === 'todos' || p.status === profStatusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
 
   // Export users to CSV
   const handleExportCSV = () => {
@@ -593,7 +391,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `sm_express_usuarios_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `sm_express_controle_logins_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -602,31 +400,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Filter users
   const filteredUsers = users.filter(u => {
     const matchesSearch = 
-      u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-      (u.phone && u.phone.includes(userSearchTerm)) ||
-      (u.cpfCnpj && u.cpfCnpj.includes(userSearchTerm)) ||
-      (u.city && u.city.toLowerCase().includes(userSearchTerm.toLowerCase()));
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.phone && u.phone.includes(searchTerm)) ||
+      (u.cpfCnpj && u.cpfCnpj.includes(searchTerm)) ||
+      (u.city && u.city.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesRole = userRoleFilter === 'todos' || u.role === userRoleFilter;
-    const matchesStatus = userStatusFilter === 'todos' || u.status === userStatusFilter;
+    const matchesRole = roleFilter === 'todos' || u.role === roleFilter;
+    const matchesStatus = statusFilter === 'todos' || u.status === statusFilter;
     const matchesCompleteness = 
-      userCompletenessFilter === 'todos' ||
-      (userCompletenessFilter === 'completo' && u.isCompleteRegistration) ||
-      (userCompletenessFilter === 'incompleto' && !u.isCompleteRegistration);
+      completenessFilter === 'todos' ||
+      (completenessFilter === 'completo' && u.isCompleteRegistration) ||
+      (completenessFilter === 'incompleto' && !u.isCompleteRegistration);
 
     return matchesSearch && matchesRole && matchesStatus && matchesCompleteness;
   });
 
-  const pendingRequests = requests.filter(r => r.status === 'pendente_orcamento');
-  const scheduledRequests = requests.filter(r => ['aprovado', 'em_execucao', 'concluido'].includes(r.status));
-  const ratedRequests = requests.filter(r => r.rating !== undefined);
-
-  // User metrics
+  // Metrics
   const totalUsersCount = users.length;
-  const clientsCount = users.filter(u => u.role === 'cliente').length;
-  const proUsersCount = users.filter(u => u.role === 'profissional').length;
-  const completeUsersCount = users.filter(u => u.isCompleteRegistration).length;
+  const activeLoginsCount = users.filter(u => u.status === 'ativo').length;
+  const blockedLoginsCount = users.filter(u => u.status === 'bloqueado').length;
+  const adminsCount = users.filter(u => u.role === 'admin').length;
 
   // Strict Admin Gate: Prevent non-admin/unauthenticated users from seeing internal data
   if (!currentUser || currentUser.role !== 'admin') {
@@ -642,17 +436,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               Área Restrita do Administrador
             </span>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-2">
-              Painel de Gestão & Operações
+              Controle de Login & Acessos
             </h2>
           </div>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-            Este painel contém métricas financeiras, emissão de orçamentos, contratos de prestadores e gestão de usuários. O acesso é exclusivo para administradores autenticados da SM Express.
+            Este módulo é exclusivo para administradores autenticados gerenciarem credenciais, ativações, bloqueios de contas e permissões de usuários.
           </p>
 
           <div className="pt-3">
             <button
-              onClick={() => onOpenAuth('admin_access')}
+              onClick={() => onOpenAuth && onOpenAuth('admin_access')}
               className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-xl shadow-amber-400/30 flex items-center justify-center gap-2 uppercase tracking-wider transition-all transform hover:scale-[1.02] mx-auto touch-target"
             >
               <ShieldCheck className="w-5 h-5 text-slate-950" />
@@ -661,7 +455,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="pt-2 text-[11px] text-slate-400">
-            Acesso protegido por autenticação segura com chave mestra e criptografia de ponta a ponta.
+            Acesso protegido por autenticação segura com chave mestra e criptografia.
           </div>
         </div>
       </div>
@@ -669,256 +463,144 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       
-      {/* Admin Panel Banner Header */}
-      <div className="bg-[#001838] text-white p-2.5 sm:p-4 rounded-2xl shadow-xl border border-amber-500/20">
-        {/* Tab Navigation (Horizontally scrollable on mobile, fluid on desktop) */}
-        <div className="flex items-center overflow-x-auto no-scrollbar bg-slate-900/90 p-1 sm:p-1.5 rounded-xl border border-slate-700 text-xs font-bold gap-1 w-full sm:w-auto flex-nowrap sm:flex-wrap">
+      {/* Admin Module Switcher & Actions Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex bg-slate-900/90 border border-slate-800 rounded-2xl p-1.5 shadow-xl gap-1.5 w-full sm:w-auto">
           <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-3 py-2 rounded-lg transition-all whitespace-nowrap touch-target flex items-center justify-center ${
-              activeTab === 'overview' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            onClick={() => setAdminTab('relatorios')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black transition-all ${
+              adminTab === 'relatorios'
+                ? 'bg-amber-400 text-slate-950 shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
           >
-            Resumo & Métricas
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Relatórios & Exportações</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('funnel')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'funnel' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            onClick={() => setAdminTab('usuarios')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black transition-all ${
+              adminTab === 'usuarios'
+                ? 'bg-amber-400 text-slate-950 shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
           >
-            <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Funil de Vendas</span>
-            <span className="bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
-              {requests.length}
-            </span>
+            <Fingerprint className="w-4 h-4" />
+            <span>Controle de Logins ({users.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('schedule')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'schedule' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            onClick={() => setAdminTab('notificacoes')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black transition-all ${
+              adminTab === 'notificacoes'
+                ? 'bg-amber-400 text-slate-950 shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Agenda & Escala</span>
-            {scheduledRequests.length > 0 && (
-              <span className="bg-blue-500/30 text-blue-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
-                {scheduledRequests.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('company')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'company' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Target className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Gestão & Metas</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'users' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Gestão de Pessoas</span>
-            <span className="bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
-              {users.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('requests')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'requests' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <span>Orçamentos</span>
-            {pendingRequests.length > 0 && (
-              <span className="bg-red-500 text-white px-1.5 py-0.2 rounded-full text-[10px]">
-                {pendingRequests.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('professionals')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'professionals' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Credenciamento</span>
-            {professionals.filter(p => p.status === 'pendente_aprovacao').length > 0 && (
-              <span className="bg-amber-500 text-slate-950 font-bold px-1.5 py-0.2 rounded-full text-[10px]">
-                {professionals.filter(p => p.status === 'pendente_aprovacao').length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('payments')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'payments' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <DollarSign className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Plataforma (30%)</span>
-            {commissionCharges.filter(c => ['pendente', 'atrasado', 'boleto_emitido'].includes(c.status)).length > 0 && (
-              <span className="bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded-full text-[10px]">
-                {commissionCharges.filter(c => ['pendente', 'atrasado', 'boleto_emitido'].includes(c.status)).length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('services')}
-            className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap touch-target justify-center ${
-              activeTab === 'services' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Serviços</span>
-            <span className="bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full text-[10px] font-bold">
-              {services.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reviews')}
-            className={`px-3 py-2 rounded-lg transition-all whitespace-nowrap touch-target flex items-center justify-center ${
-              activeTab === 'reviews' ? 'bg-amber-400 text-slate-950 font-black shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            Avaliações
+            <MessageCircle className="w-4 h-4" />
+            <span>Notificações WhatsApp & E-mail</span>
           </button>
         </div>
+
+        {/* Action: Limpar dados de teste e deixar apto ao uso */}
+        {onPurgeAllData && (
+          <button
+            onClick={() => setIsPurgeModalOpen(true)}
+            className="px-3.5 py-2.5 bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 rounded-xl border border-slate-300 hover:border-red-300 font-bold text-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto shadow-xs"
+            title="Limpar cadastros de clientes, solicitações de orçamento e pagamentos de teste, deixando o sistema limpo e apto para uso"
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>Limpar Dados (Apto ao Uso)</span>
+          </button>
+        )}
       </div>
 
-      {/* Admin Master Authentication Status Banner */}
-      {currentUser && currentUser.role === 'admin' ? (
-        <div className="p-3 sm:p-4 bg-gradient-to-r from-amber-500/15 via-amber-400/10 to-slate-900 border border-amber-400/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md flex-shrink-0">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-slate-900">Sessão Autenticada de Administrador</span>
-                <span className="px-2 py-0.5 bg-emerald-500 text-white rounded-full text-[10px] font-black uppercase tracking-wider">
-                  MASTER ATIVO
-                </span>
-              </div>
-              <p className="text-xs text-slate-600">
-                Logado como <strong className="text-slate-900">{currentUser.name}</strong> ({currentUser.email}) • Privilégios completos de gestão.
-              </p>
-            </div>
-          </div>
-          {/* Action buttons */}
-          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
-            {onPurgeAllData && (
-              <button
-                type="button"
-                onClick={() => setIsPurgeModalOpen(true)}
-                className="px-3.5 py-1.5 bg-red-600/90 hover:bg-red-700 text-white text-xs font-bold rounded-xl border border-red-500 transition-colors flex items-center gap-1.5 shadow-sm"
-                title="Limpar todos os cadastros, orçamentos e registros do sistema"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Zerar Base (0 Registros)</span>
-              </button>
-            )}
-
-            {onOpenAuth && (
-              <button
-                onClick={() => onOpenAuth('profile')}
-                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl border border-amber-400/30 transition-colors"
-              >
-                Configurar Perfil ADM
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 text-white border border-amber-400/50 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md flex-shrink-0">
-              <Lock className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold text-amber-300">Modo de Acesso Rápido / Visualização</span>
-                <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded-full text-[10px] font-bold">
-                  CONVIDADO
-                </span>
-              </div>
-              <p className="text-xs text-slate-300">
-                Para autenticar e salvar orçamentos com a conta oficial do administrador master (rmonteir75@gmail.com):
-              </p>
-            </div>
-          </div>
-          {onOpenAuth && (
-            <button
-              onClick={() => onOpenAuth('admin_access')}
-              className="px-4 py-2 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Acessar como ADM</span>
-            </button>
-          )}
-        </div>
+      {/* VIEW: CENTRAL DE RELATÓRIOS & EXPORTAÇÕES */}
+      {adminTab === 'relatorios' && (
+        <AdminReportsCenter
+          requests={requests}
+          professionals={professionals}
+          charges={charges}
+          users={users}
+          services={services}
+          onPurgeAllData={onPurgeAllData}
+        />
       )}
 
-      {userSuccessMessage && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-800 flex items-center justify-between shadow-sm animate-fade-in">
-          <div className="flex items-center gap-2 font-bold">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            <span>{userSuccessMessage}</span>
-          </div>
-          <button onClick={() => setUserSuccessMessage('')} className="text-slate-400 hover:text-slate-600">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 1: GESTÃO DE PESSOAS CADASTRADAS (NOVA ÁREA COMPLETA DO ADM) */}
-      {/* ========================================================================= */}
-      {activeTab === 'users' && (
+      {/* VIEW: CONTROLE DE LOGINS & ACESSOS */}
+      {adminTab === 'usuarios' && (
         <div className="space-y-6 animate-fade-in">
-          
-          {/* User Metrics Summary (Totens Interativos) */}
+          {/* Header Banner - Exclusive Login & Access Control */}
+          <div className="bg-[#001838] text-white p-5 sm:p-6 rounded-3xl shadow-xl border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md flex-shrink-0">
+                <Fingerprint className="w-7 h-7" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-black text-white">
+                    Controle de Login & Acessos
+                  </h2>
+                  <span className="px-2 py-0.5 bg-amber-400 text-slate-950 font-black text-[10px] rounded-full uppercase tracking-wider">
+                    ADMIN
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Gestão centralizada de contas, credenciais, senhas e controle de ativação/bloqueio de acessos.
+                </p>
+              </div>
+            </div>
+
+            {/* Admin actions */}
+            <div className="flex flex-wrap items-center gap-2">
+              {onOpenAuth && (
+                <button
+                  onClick={() => onOpenAuth('profile')}
+                  className="px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl border border-amber-400/40 transition-colors flex items-center gap-1.5 shadow-sm"
+                  title="Configurar credenciais e senha do administrador master"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>Perfil & Senha ADM</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleOpenNewUser}
+                className="px-4 py-2 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Cadastrar Novo Login</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Login KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Totem 1: Pessoas Cadastradas */}
+            {/* Totem 1: Total Logins */}
             <div 
               onClick={() => {
-                setUserRoleFilter('todos');
-                setUserStatusFilter('todos');
-                setUserCompletenessFilter('todos');
-                setUserSearchTerm('');
+                setRoleFilter('todos');
+                setStatusFilter('todos');
+                setCompletenessFilter('todos');
+                setSearchTerm('');
               }}
               role="button"
               tabIndex={0}
               className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-md cursor-pointer transition-all active:scale-[0.98] flex items-center justify-between group"
-              title="Clique para ver todos os usuários cadastrados"
+              title="Clique para listar todos os usuários"
             >
               <div>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-blue-600 transition-colors">
-                  Pessoas Cadastradas
+                  Total de Contas
                 </span>
                 <div className="text-2xl sm:text-3xl font-black text-[#001838] mt-1">
                   {totalUsersCount}
                 </div>
-                <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5 mt-1">
-                  <TrendingUp className="w-3 h-3" /> Base de Usuários Ativa
+                <span className="text-[10px] text-blue-600 font-bold flex items-center gap-0.5 mt-1">
+                  Base de Logins Cadastrada
                 </span>
               </div>
               <div className="p-3 bg-blue-100 text-blue-800 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -926,87 +608,86 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Totem 2: Clientes Ativos */}
+            {/* Totem 2: Logins Ativos */}
             <div 
               onClick={() => {
-                setUserRoleFilter('cliente');
-                setUserStatusFilter('ativo');
-              }}
-              role="button"
-              tabIndex={0}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-400 hover:shadow-md cursor-pointer transition-all active:scale-[0.98] flex items-center justify-between group"
-              title="Clique para filtrar apenas clientes ativos"
-            >
-              <div>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-amber-600 transition-colors">
-                  Clientes Ativos
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-[#001838] mt-1">
-                  {clientsCount}
-                </div>
-                <span className="text-[10px] text-amber-600 font-bold mt-1 block">
-                  {totalUsersCount > 0 ? Math.round((clientsCount / totalUsersCount) * 100) : 0}% da base total (filtrar)
-                </span>
-              </div>
-              <div className="p-3 bg-amber-100 text-amber-800 rounded-2xl group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors">
-                <User className="w-6 h-6" />
-              </div>
-            </div>
-
-            {/* Totem 3: Profissionais */}
-            <div 
-              onClick={() => {
-                setActiveTab('professionals');
+                setStatusFilter('ativo');
               }}
               role="button"
               tabIndex={0}
               className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-400 hover:shadow-md cursor-pointer transition-all active:scale-[0.98] flex items-center justify-between group"
-              title="Clique para ir para a aba de Credenciamento de Profissionais"
+              title="Clique para filtrar apenas logins com acesso ativo"
             >
               <div>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-emerald-600 transition-colors">
-                  Profissionais
+                  Logins Ativos
                 </span>
-                <div className="text-2xl sm:text-3xl font-black text-[#001838] mt-1">
-                  {proUsersCount}
+                <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
+                  {activeLoginsCount}
                 </div>
                 <span className="text-[10px] text-emerald-600 font-bold mt-1 block">
-                  Ver Credenciamento →
+                  Acesso Liberado no App
                 </span>
               </div>
               <div className="p-3 bg-emerald-100 text-emerald-800 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                <Briefcase className="w-6 h-6" />
+                <Unlock className="w-6 h-6" />
               </div>
             </div>
 
-            {/* Totem 4: Cadastros Completos */}
+            {/* Totem 3: Logins Bloqueados */}
             <div 
               onClick={() => {
-                setUserCompletenessFilter('completo');
+                setStatusFilter('bloqueado');
+              }}
+              role="button"
+              tabIndex={0}
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-red-400 hover:shadow-md cursor-pointer transition-all active:scale-[0.98] flex items-center justify-between group"
+              title="Clique para filtrar apenas logins bloqueados/suspensos"
+            >
+              <div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-red-600 transition-colors">
+                  Bloqueados / Suspensos
+                </span>
+                <div className="text-2xl sm:text-3xl font-black text-red-600 mt-1">
+                  {blockedLoginsCount}
+                </div>
+                <span className="text-[10px] text-red-500 font-bold mt-1 block">
+                  {blockedLoginsCount > 0 ? 'Acesso Revogado' : 'Nenhum bloqueio'}
+                </span>
+              </div>
+              <div className="p-3 bg-red-100 text-red-700 rounded-2xl group-hover:bg-red-600 group-hover:text-white transition-colors">
+                <Lock className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Totem 4: Administradores */}
+            <div 
+              onClick={() => {
+                setRoleFilter('admin');
               }}
               role="button"
               tabIndex={0}
               className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-400 hover:shadow-md cursor-pointer transition-all active:scale-[0.98] flex items-center justify-between group"
-              title="Clique para filtrar apenas cadastros 100% completos"
+              title="Clique para filtrar administradores"
             >
               <div>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-purple-600 transition-colors">
-                  Cadastros Completos
+                  Administradores
                 </span>
-                <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
-                  {completeUsersCount} <span className="text-sm font-bold text-slate-400">/ {totalUsersCount}</span>
+                <div className="text-2xl sm:text-3xl font-black text-purple-800 mt-1">
+                  {adminsCount}
                 </div>
-                <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5 mt-1">
-                  <CheckCircle2 className="w-3 h-3" /> CPF + Endereço (filtrar)
+                <span className="text-[10px] text-purple-600 font-bold mt-1 block">
+                  Acesso Master / Gestão
                 </span>
               </div>
               <div className="p-3 bg-purple-100 text-purple-800 rounded-2xl group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                <FileText className="w-6 h-6" />
+                <ShieldCheck className="w-6 h-6" />
               </div>
             </div>
           </div>
 
-          {/* Action Bar: Search, Filters & Add User Button */}
+          {/* Action Bar: Search, Filters & Export */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
               
@@ -1015,9 +696,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  value={userSearchTerm}
-                  onChange={(e) => setUserSearchTerm(e.target.value)}
-                  placeholder="Pesquisar por Nome, CPF, E-mail, Telefone ou Cidade..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar por Nome, E-mail de Login, CPF, Telefone ou Cidade..."
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 />
               </div>
@@ -1027,7 +708,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <button
                   onClick={handleExportCSV}
                   className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition-colors flex items-center gap-1.5"
-                  title="Exportar dados em formato CSV"
+                  title="Exportar dados de login em formato CSV"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Exportar</span> CSV
@@ -1038,7 +719,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
                 >
                   <UserPlus className="w-4 h-4" />
-                  <span>Cadastrar Pessoa</span>
+                  <span>Novo Login</span>
                 </button>
               </div>
             </div>
@@ -1051,46 +732,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Role filter */}
               <select
-                value={userRoleFilter}
-                onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as any)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 text-xs focus:outline-none focus:border-amber-400"
               >
-                <option value="todos">Todos os Papéis</option>
-                <option value="cliente">Apenas Clientes</option>
-                <option value="profissional">Apenas Profissionais</option>
-                <option value="admin">Apenas Administradores</option>
+                <option value="todos">Todos os Papéis ({users.length})</option>
+                <option value="cliente">Clientes ({users.filter(u => u.role === 'cliente').length})</option>
+                <option value="profissional">Profissionais ({users.filter(u => u.role === 'profissional').length})</option>
+                <option value="admin">Administradores ({users.filter(u => u.role === 'admin').length})</option>
               </select>
 
               {/* Status filter */}
               <select
-                value={userStatusFilter}
-                onChange={(e) => setUserStatusFilter(e.target.value as any)}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 text-xs focus:outline-none focus:border-amber-400"
               >
-                <option value="todos">Todos os Status</option>
-                <option value="ativo">Status: Ativo</option>
-                <option value="pendente">Status: Pendente</option>
-                <option value="bloqueado">Status: Bloqueado</option>
+                <option value="todos">Todos os Status de Login</option>
+                <option value="ativo">● Ativo (Liberado)</option>
+                <option value="bloqueado">● Bloqueado (Suspenso)</option>
+                <option value="pendente">● Pendente</option>
               </select>
 
               {/* Completeness filter */}
               <select
-                value={userCompletenessFilter}
-                onChange={(e) => setUserCompletenessFilter(e.target.value as any)}
+                value={completenessFilter}
+                onChange={(e) => setCompletenessFilter(e.target.value as any)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 text-xs focus:outline-none focus:border-amber-400"
               >
                 <option value="todos">Todos os Cadastros</option>
-                <option value="completo">Cadastro 100% Completo</option>
+                <option value="completo">Cadastro Completo</option>
                 <option value="incompleto">Cadastro Parcial</option>
               </select>
 
-              {(userSearchTerm || userRoleFilter !== 'todos' || userStatusFilter !== 'todos' || userCompletenessFilter !== 'todos') && (
+              {(searchTerm || roleFilter !== 'todos' || statusFilter !== 'todos' || completenessFilter !== 'todos') && (
                 <button
                   onClick={() => {
-                    setUserSearchTerm('');
-                    setUserRoleFilter('todos');
-                    setUserStatusFilter('todos');
-                    setUserCompletenessFilter('todos');
+                    setSearchTerm('');
+                    setRoleFilter('todos');
+                    setStatusFilter('todos');
+                    setCompletenessFilter('todos');
                   }}
                   className="text-amber-600 hover:text-amber-700 font-bold text-xs underline ml-auto"
                 >
@@ -1100,35 +781,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* User Table / Cards */}
+          {/* User Login Control Table / Cards */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="font-extrabold text-[#001838] text-sm">
-                Lista de Pessoas e Clientes ({filteredUsers.length})
-              </h3>
-              <span className="text-xs text-slate-500 font-medium">
-                Clique para visualizar ficha completa, editar dados ou gerenciar permissões
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-extrabold text-[#001838] text-sm">
+                  Lista de Contas & Controle de Acessos ({filteredUsers.length})
+                </h3>
+                <span className="text-xs text-slate-500 font-medium">
+                  Gerencie ativação, bloqueio, senhas e permissões de cada usuário
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-slate-400">
+                Clique no cadeado para Ativar/Bloquear imediatamente
               </span>
             </div>
 
             {filteredUsers.length === 0 ? (
               <div className="p-12 text-center text-slate-400 space-y-2">
                 <Users className="w-10 h-10 mx-auto text-slate-300" />
-                <p className="font-bold text-slate-600">Nenhum cadastro encontrado</p>
-                <p className="text-xs">Tente ajustar os termos de pesquisa ou filtros aplicados.</p>
+                <p className="font-bold text-slate-600">Nenhum login encontrado</p>
+                <p className="text-xs">Tente ajustar os termos de busca ou filtros de papel e status.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
                 {filteredUsers.map((u) => {
-                  const userRequests = requests.filter(r => r.clientEmail.toLowerCase() === u.email.toLowerCase());
                   const formattedPhoneNum = u.phone ? u.phone.replace(/\D/g, '') : '';
+                  const isPasswordVisible = showPasswordMap[u.id];
 
                   return (
                     <div
                       key={u.id}
-                      className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                      className={`p-4 sm:p-5 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                        u.status === 'bloqueado' ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-slate-50/80'
+                      }`}
                     >
-                      {/* User Info Col */}
+                      {/* User Profile Info */}
                       <div className="flex items-start sm:items-center gap-3.5">
                         {(u.photo3x4Url || u.avatarUrl) ? (
                           <img
@@ -1162,19 +850,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Status Badge */}
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               u.status === 'ativo'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                 : u.status === 'bloqueado'
-                                ? 'bg-red-50 text-red-700 border border-red-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                ? 'bg-red-100 text-red-800 border border-red-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300'
                             }`}>
-                              {u.status === 'ativo' ? '● Ativo' : u.status === 'bloqueado' ? '● Bloqueado' : '● Pendente'}
+                              {u.status === 'ativo' ? '● Acesso Liberado' : u.status === 'bloqueado' ? '● Bloqueado' : '● Pendente'}
                             </span>
                           </div>
 
+                          {/* Login Credentials & Contacts */}
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1 font-medium text-slate-700">
                               <Mail className="w-3.5 h-3.5 text-slate-400" />
-                              {u.email}
+                              <strong>Login:</strong> {u.email}
                             </span>
 
                             {u.phone && (
@@ -1199,27 +888,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                       </div>
 
-                      {/* Completeness & Stats */}
-                      <div className="flex items-center gap-4 text-xs">
-                        <div className="hidden sm:block text-right">
-                          <div className="font-bold text-slate-700">
-                            {u.isCompleteRegistration ? (
-                              <span className="text-emerald-700 flex items-center justify-end gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Cadastro 100% Completo
-                              </span>
-                            ) : (
-                              <span className="text-amber-600 flex items-center justify-end gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5" /> Cadastro Parcial
-                              </span>
-                            )}
+                      {/* Password status & Quick Actions */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs ml-auto lg:ml-0">
+                        
+                        {/* Password peek/status */}
+                        <div className="bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-[11px] flex items-center gap-2">
+                          <Key className="w-3.5 h-3.5 text-amber-600" />
+                          <div>
+                            <span className="text-slate-500 text-[10px] block">Senha de Acesso:</span>
+                            <span className="font-mono font-bold text-slate-800">
+                              {u.password ? (
+                                isPasswordVisible ? u.password : '••••••••'
+                              ) : (
+                                <span className="text-amber-700 italic">Padrão do sistema</span>
+                              )}
+                            </span>
                           </div>
-                          <span className="text-[11px] text-slate-400">
-                            {userRequests.length} solicitações no app
-                          </span>
+                          {u.password && (
+                            <button
+                              type="button"
+                              onClick={() => setShowPasswordMap(prev => ({ ...prev, [u.id]: !prev[u.id] }))}
+                              className="text-slate-400 hover:text-slate-700 p-0.5 ml-1"
+                              title={isPasswordVisible ? 'Ocultar senha' : 'Ver senha'}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex items-center gap-1.5 ml-auto lg:ml-0">
+                        <div className="flex items-center gap-1.5">
+                          
                           {/* WhatsApp Direct Link */}
                           {formattedPhoneNum && (
                             <a
@@ -1233,42 +932,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </a>
                           )}
 
-                          {/* View Full Dossier */}
+                          {/* Toggle Lock / Unlock Login Status */}
+                          <button
+                            onClick={() => handleToggleStatus(u)}
+                            className={`px-3 py-2 rounded-xl font-bold text-xs transition-colors border flex items-center gap-1.5 shadow-sm ${
+                              u.status === 'ativo'
+                                ? 'bg-slate-50 hover:bg-red-50 text-slate-600 hover:text-red-700 border-slate-200'
+                                : 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600'
+                            }`}
+                            title={u.status === 'ativo' ? 'Bloquear / Suspender Acesso' : 'Desbloquear / Liberar Acesso'}
+                          >
+                            {u.status === 'ativo' ? (
+                              <>
+                                <Lock className="w-3.5 h-3.5 text-red-500" />
+                                <span>Bloquear</span>
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="w-3.5 h-3.5" />
+                                <span>Liberar</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* View Dossier */}
                           <button
                             onClick={() => setSelectedUserForView(u)}
                             className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
-                            title="Ver Dossiê e Histórico Completo"
+                            title="Ver Dossiê e Informações Completas"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Edit User */}
+                          {/* Edit Login / Credentials */}
                           <button
                             onClick={() => handleOpenEditUser(u)}
                             className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl transition-colors"
-                            title="Editar Cadastro Completo"
+                            title="Editar Login, Senha e Dados"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
 
-                          {/* Toggle Status Lock/Unlock */}
-                          <button
-                            onClick={() => handleToggleStatus(u)}
-                            className={`p-2 rounded-xl transition-colors border ${
-                              u.status === 'ativo'
-                                ? 'bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 border-slate-200'
-                                : 'bg-red-50 hover:bg-emerald-50 text-red-600 hover:text-emerald-700 border-red-200'
-                            }`}
-                            title={u.status === 'ativo' ? 'Bloquear usuário' : 'Ativar usuário'}
-                          >
-                            {u.status === 'ativo' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                          </button>
-
-                          {/* Delete User */}
+                          {/* Delete Login */}
                           <button
                             onClick={() => setUserToDelete(u)}
                             className="p-2 bg-slate-50 hover:bg-red-100 text-slate-400 hover:text-red-700 rounded-xl transition-colors"
-                            title="Excluir cadastro"
+                            title="Excluir conta de login"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1280,992 +989,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
           </div>
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* TAB 2: OVERVIEW & CHARTS */}
-      {/* ========================================================================= */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          
-          {/* Top Metrics Cards (Totens Interativos com Redirecionamento) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Totem 1: SOLICITAÇÕES */}
-            <div 
-              onClick={() => setActiveTab('requests')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveTab('requests'); }}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden flex items-center justify-between"
-              title="Clique para ir para Solicitações de Orçamento"
-            >
-              <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
-              <div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-blue-600 transition-colors">
-                    Solicitações
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-0.5" />
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-[#001838] mt-1 group-hover:text-blue-900 transition-colors">
-                  {metrics.totalSolicitacoes}
-                </div>
-                <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5 mt-1">
-                  <TrendingUp className="w-3 h-3" /> +14% este mês
-                </span>
-                <span className="text-[9px] text-blue-600 font-semibold block mt-0.5 opacity-80 group-hover:opacity-100">
-                  Clique para abrir solicitações →
-                </span>
-              </div>
-              <div className="p-3 bg-blue-100 text-blue-800 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm">
-                <FileText className="w-6 h-6" />
-              </div>
+          {/* Security Guidance Note */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
+            <div className="flex items-center gap-1.5 font-bold text-slate-800">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span>Políticas de Segurança e Controle de Acessos SM Express</span>
             </div>
-
-            {/* Totem 2: ORÇAMENTOS */}
-            <div 
-              onClick={() => setActiveTab('requests')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveTab('requests'); }}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden flex items-center justify-between"
-              title="Clique para gerenciar Orçamentos Pendentes"
-            >
-              <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
-              <div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-amber-600 transition-colors">
-                    Orçamentos
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-0.5" />
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-[#001838] mt-1 group-hover:text-amber-900 transition-colors">
-                  {metrics.totalOrcamentos}
-                </div>
-                <span className="text-[10px] text-amber-600 font-bold flex items-center gap-0.5 mt-1">
-                  <Clock className="w-3 h-3" /> Taxa de resposta: 98%
-                </span>
-                <span className="text-[9px] text-amber-700 font-semibold block mt-0.5 opacity-80 group-hover:opacity-100">
-                  Clique para emitir orçamentos →
-                </span>
-              </div>
-              <div className="p-3 bg-amber-100 text-amber-800 rounded-2xl group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors shadow-sm">
-                <Clock className="w-6 h-6" />
-              </div>
-            </div>
-
-            {/* Totem 3: AGENDAMENTOS */}
-            <div 
-              onClick={() => setActiveTab('schedule')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveTab('schedule'); }}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-400 hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden flex items-center justify-between"
-              title="Clique para ver a Agenda de Serviços e Execução"
-            >
-              <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
-              <div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-emerald-600 transition-colors">
-                    Agendamentos
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-0.5" />
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-[#001838] mt-1 group-hover:text-emerald-900 transition-colors">
-                  {metrics.totalAgendamentos}
-                </div>
-                <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5 mt-1">
-                  <Calendar className="w-3 h-3" /> Concluídos com sucesso
-                </span>
-                <span className="text-[9px] text-emerald-700 font-semibold block mt-0.5 opacity-80 group-hover:opacity-100">
-                  Clique para abrir a Agenda →
-                </span>
-              </div>
-              <div className="p-3 bg-emerald-100 text-emerald-800 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shadow-sm">
-                <Calendar className="w-6 h-6" />
-              </div>
-            </div>
-
-            {/* Totem 4: FATURAMENTO */}
-            <div 
-              onClick={() => {
-                const el = document.getElementById('charts-section');
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { 
-                if (e.key === 'Enter' || e.key === ' ') {
-                  const el = document.getElementById('charts-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-              }}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-400 hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden flex items-center justify-between"
-              title="Clique para ver Gráficos de Faturamento e Demanda"
-            >
-              <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
-              <div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-emerald-600 transition-colors">
-                    Faturamento
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-0.5" />
-                </div>
-                <div className="text-xl sm:text-2xl font-black text-emerald-700 mt-1">
-                  R$ {metrics.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </div>
-                <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5 mt-1">
-                  <DollarSign className="w-3 h-3" /> Crescimento sustentável
-                </span>
-                <span className="text-[9px] text-emerald-700 font-semibold block mt-0.5 opacity-80 group-hover:opacity-100">
-                  Ver gráficos detalhados ↓
-                </span>
-              </div>
-              <div className="p-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white transition-colors shadow-sm">
-                <DollarSign className="w-6 h-6" />
-              </div>
-            </div>
-          </div>
-
-          <div id="charts-section" className="grid grid-cols-1 lg:grid-cols-3 gap-6 scroll-mt-6">
-            {/* Chart 1: Solicitações por período */}
-            <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-base font-extrabold text-[#001838]">Solicitações por período</h3>
-                  <p className="text-xs text-slate-500">Evolução mensal de pedidos e faturamento gerado</p>
-                </div>
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-bold text-slate-600">
-                  <BarChart3 className="w-4 h-4 text-amber-500" />
-                  <span>Mensal 2026</span>
-                </div>
-              </div>
-
-              <div className="h-64 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyChartData}>
-                    <defs>
-                      <linearGradient id="colorSolicitacoes" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="period" stroke="#64748b" fontSize={12} />
-                    <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#001838', color: '#fff', borderRadius: '12px', border: 'none' }}
-                    />
-                    <Area type="monotone" dataKey="solicitacoes" stroke="#3B82F6" fillOpacity={1} fill="url(#colorSolicitacoes)" name="Solicitações" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Chart 2: Serviços mais solicitados */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-              <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-base font-extrabold text-[#001838]">Serviços mais solicitados</h3>
-                <p className="text-xs text-slate-500">Distribuição percentual de demanda por categoria</p>
-              </div>
-
-              {serviceDistributionData.length > 0 ? (
-                <>
-                  <div className="h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={serviceDistributionData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={45}
-                          outerRadius={75}
-                          paddingAngle={4}
-                          dataKey="value"
-                        >
-                          {serviceDistributionData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Legend */}
-                  <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600">
-                    {serviceDistributionData.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                        <span className="truncate">{item.name} ({item.value}%)</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="h-48 flex flex-col items-center justify-center text-center p-4 text-slate-400 space-y-2">
-                  <BarChart3 className="w-8 h-8 text-slate-300" />
-                  <p className="text-xs">Aguardando solicitações para calcular a distribuição em tempo real.</p>
-                </div>
-              )}
-            </div>
+            <p className="text-slate-500 leading-relaxed">
+              • O bloqueio de um login revoga instantaneamente o acesso do usuário ao aplicativo e à plataforma de serviços.<br />
+              • Para redefinir ou criar novas senhas, utilize o botão <strong>Editar (Lápis)</strong> ou <strong>Novo Login</strong>.<br />
+              • Todas as alterações de papéis e status são sincronizadas com a base de autenticação do sistema.
+            </p>
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 3: GESTÃO DE ORÇAMENTOS */}
-      {/* ========================================================================= */}
-      {activeTab === 'requests' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-[#001838]">Solicitações Pendentes de Orçamento</h3>
-            <span className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1 rounded-full">
-              {pendingRequests.length} pendentes
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingRequests.length === 0 ? (
-              <div className="col-span-2 bg-white p-8 rounded-2xl border text-center text-slate-400">
-                Não há solicitações pendentes de orçamento no momento.
-              </div>
-            ) : (
-              pendingRequests.map((req) => (
-                <div key={req.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-xs font-mono font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                        {req.id}
-                      </span>
-                      <h4 className="font-bold text-slate-900 text-base mt-1">{req.serviceTitle}</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(req.createdAt).toLocaleDateString('pt-BR')}
-                      </span>
-                      {onDeleteRequest && (
-                        <button
-                          onClick={() => onDeleteRequest(req.id)}
-                          className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Excluir solicitação"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="text-xs space-y-1.5 text-slate-600 bg-slate-50 p-3 rounded-xl">
-                    <div className="flex items-center gap-1 text-slate-800 font-bold">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{req.clientName}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{req.clientPhone}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-1">
-                      <div className="flex items-start gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
-                        <span>{req.street}, {req.number} - {req.neighborhood}, {req.city}/{req.state} {req.cep ? `(${req.cep})` : ''}</span>
-                      </div>
-                      <a
-                        href={req.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${req.street}, ${req.number}, ${req.neighborhood}, ${req.city} - ${req.state}, Brasil`)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-0.5 flex-shrink-0"
-                        title="Ver no Google Maps"
-                      >
-                        <ExternalLink className="w-3 h-3" /> Maps
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-1 text-amber-700 font-semibold pt-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Data desejada: {req.desiredDate}</span>
-                    </div>
-
-                    {/* Photos Preview */}
-                    {((req.photos && req.photos.length > 0) || req.photoUrl) && (
-                      <div className="pt-2 border-t border-slate-200/80">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
-                          <span className="flex items-center gap-1">
-                            <Camera className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Fotos anexadas pelo cliente:</span>
-                          </span>
-                          <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded font-mono">
-                            {req.photos?.length || 1} foto(s)
-                          </span>
-                        </div>
-                        <div className="flex gap-1.5 overflow-x-auto py-1">
-                          {(req.photos || [req.photoUrl]).map((img, i) => (
-                            <img
-                              key={i}
-                              src={img}
-                              alt={`Anexo ${i + 1}`}
-                              className="w-12 h-12 object-cover rounded-lg border border-slate-300 hover:scale-105 transition-transform"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => handleOpenQuoteForm(req)}
-                    className="w-full py-2.5 bg-[#001838] hover:bg-[#022452] text-amber-400 font-black text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Emitir e Enviar Orçamento</span>
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      {/* VIEW: NOTIFICAÇÕES WHATSAPP & E-MAIL */}
+      {adminTab === 'notificacoes' && (
+        <AdminNotificationCenter />
       )}
 
       {/* ========================================================================= */}
-      {/* TAB: FUNIL DE VENDAS & CRM */}
-      {/* ========================================================================= */}
-      {activeTab === 'funnel' && (
-        <SalesFunnelCRM
-          requests={requests}
-          professionals={professionals}
-          onUpdateStatus={onUpdateStatus}
-          onOpenQuoteForm={handleOpenQuoteForm}
-          onDeleteRequest={onDeleteRequest}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB: AGENDA GERAL DE SERVIÇOS & ESCALA */}
-      {/* ========================================================================= */}
-      {activeTab === 'schedule' && (
-        <ServiceAgendaCalendar
-          requests={requests}
-          professionals={professionals}
-          services={services}
-          onUpdateStatus={onUpdateStatus}
-          onOpenQuoteForm={handleOpenQuoteForm}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB: GESTÃO DA EMPRESA & METAS */}
-      {/* ========================================================================= */}
-      {activeTab === 'company' && (
-        <CompanyManagementPanel
-          requests={requests}
-          professionals={professionals}
-          users={users}
-          charges={commissionCharges}
-          services={services}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 5: AVALIAÇÕES */}
-      {/* ========================================================================= */}
-      {activeTab === 'reviews' && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-[#001838]">Avaliações Recebidas de Clientes</h3>
-          {ratedRequests.length === 0 ? (
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-2">
-              <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto">
-                <Star className="w-6 h-6" />
-              </div>
-              <h4 className="font-bold text-slate-800">Nenhuma avaliação recebida ainda</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                As avaliações e depoimentos de clientes aparecerão aqui assim que os serviços concluídos forem avaliados.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {ratedRequests.map((req) => (
-                <div key={req.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900 text-sm">{req.serviceTitle}</span>
-                    <div className="flex items-center text-amber-400">
-                      {[...Array(req.rating?.stars || 5)].map((_, i) => (
-                        <Star key={i} className="w-4 h-4 fill-amber-400" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 italic">"{req.rating?.comment}"</p>
-                  <div className="text-[10px] text-slate-400 flex justify-between border-t pt-2">
-                    <span>Por {req.clientName}</span>
-                    <span>Profissional: {req.assignedProfessional}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 6: CREDENCIAMENTO & GESTÃO DE PROFISSIONAIS */}
-      {/* ========================================================================= */}
-      {activeTab === 'professionals' && (
-        <div className="space-y-4 animate-fadeIn">
-          
-          {profSuccessMessage && (
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-800 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-2 font-bold">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <span>{profSuccessMessage}</span>
-              </div>
-              <button onClick={() => setProfSuccessMessage('')} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Header & Filter Controls for Professionals */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-black text-[#001838]">Profissionais Cadastrados & Credenciamento</h3>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Search */}
-              <div className="relative min-w-[220px]">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Buscar prestador, CPF, cidade..."
-                  value={profSearchTerm}
-                  onChange={(e) => setProfSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-
-              {/* Status Filter */}
-              <select
-                value={profStatusFilter}
-                onChange={(e) => setProfStatusFilter(e.target.value as any)}
-                className="py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="todos">Todos ({professionals.length})</option>
-                <option value="aprovado">Homologados ({professionals.filter(p => p.status === 'aprovado').length})</option>
-                <option value="pendente_aprovacao">Em Análise ({professionals.filter(p => p.status === 'pendente_aprovacao').length})</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredProfessionals.length === 0 ? (
-              <div className="col-span-2 bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 italic">
-                Nenhum profissional encontrado com os filtros selecionados.
-              </div>
-            ) : (
-              filteredProfessionals.map((prof) => (
-                <div key={prof.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-16 rounded-xl overflow-hidden border-2 border-amber-400 flex-shrink-0 bg-slate-900 shadow-sm flex items-center justify-center">
-                          {(prof.photo3x4Url || prof.photoUrl) ? (
-                            <img
-                              src={prof.photo3x4Url || prof.photoUrl}
-                              alt={prof.fullName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-amber-400">
-                              <User className="w-6 h-6 opacity-80" />
-                              <span className="text-[9px] font-bold text-slate-300">
-                                {prof.fullName.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                          <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[7px] font-mono text-amber-400 text-center font-bold">
-                            ID 3/4
-                          </span>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-900 text-base">{prof.fullName}</h4>
-                          <div className="flex items-center gap-1 text-amber-500 text-xs font-bold mt-0.5">
-                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                            <span>{prof.rating ? prof.rating.toFixed(1) : '5.0'}</span>
-                            <span className="text-slate-400 font-normal">({prof.completedJobs || 12} serviços)</span>
-                          </div>
-                          <span className="text-[11px] text-slate-400 font-mono">CPF/CNPJ: {prof.cpfCnpj}</span>
-                        </div>
-                      </div>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        prof.status === 'aprovado' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
-                      }`}>
-                        {prof.status === 'aprovado' ? 'Homologado' : 'Em Análise'}
-                      </span>
-                    </div>
-
-                    {/* Categorias / Especialidades */}
-                    {prof.categories && prof.categories.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {prof.categories.map((catId) => (
-                          <span key={catId} className="text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-lg capitalize">
-                            {catId.replace(/_/g, ' ')}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-xl">
-                      <div><strong>Cidade / Região:</strong> {prof.city} - {prof.state} {prof.neighborhood ? `(${prof.neighborhood})` : ''}</div>
-                      <div><strong>Telefone / WhatsApp:</strong> {prof.phone}</div>
-                      {prof.email && <div><strong>E-mail:</strong> {prof.email}</div>}
-                      <div><strong>Experiência:</strong> {prof.experienceYears}</div>
-                      <div><strong>Estrutura:</strong> {prof.hasVehicle ? 'Veículo Próprio' : 'Transporte Regular'} • {prof.hasOwnTools ? 'Ferramentas 100%' : 'Ferramental Parcial'}</div>
-                      {prof.notes && <div className="text-slate-500 italic mt-1 bg-white p-2 rounded border border-slate-200">"{prof.notes}"</div>}
-                    </div>
-
-                    {/* Tabela de Valores Médios Cadastrados por Serviço */}
-                    {prof.serviceRates && prof.serviceRates.length > 0 && (
-                      <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 space-y-1.5 text-xs">
-                        <div className="font-extrabold text-amber-900 flex items-center justify-between">
-                          <span className="flex items-center gap-1.5">
-                            <DollarSign className="w-3.5 h-3.5 text-amber-600" />
-                            Tabela de Preços Médios Praticados:
-                          </span>
-                          <span className="text-[10px] text-amber-700 bg-amber-200/60 px-2 py-0.5 rounded-full font-bold">
-                            {prof.serviceRates.length} serviço(s)
-                          </span>
-                        </div>
-
-                        <div className="space-y-1 pt-1">
-                          {prof.serviceRates.map((rate, rIdx) => {
-                            const modelLabel = 
-                              rate.chargingModel === 'por_hora' ? 'por hora' :
-                              rate.chargingModel === 'por_diaria' ? 'por diária' :
-                              rate.chargingModel === 'por_m2' ? 'por m²' :
-                              rate.chargingModel === 'a_combinar' ? 'a combinar' : 'por serviço';
-
-                            return (
-                              <div key={rIdx} className="bg-white p-2 rounded-lg border border-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                <div>
-                                  <span className="font-bold text-slate-800 capitalize">
-                                    {rate.categoryId.replace(/_/g, ' ')}
-                                  </span>
-                                  {rate.description && (
-                                    <span className="text-[10px] text-slate-500 block">
-                                      {rate.description}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <span className="font-black text-emerald-700 text-xs">
-                                    R$ {rate.averagePrice.toFixed(2)}
-                                  </span>
-                                  <span className="text-[10px] text-slate-500 block">
-                                    ({modelLabel})
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Contrato Digital de Parceria (30% Repasse & Cláusula de Boleto) */}
-                    <div className="bg-amber-50/60 border border-amber-200/90 rounded-xl p-3 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-amber-950 flex items-center gap-1.5 text-[11px]">
-                          <Scale className="w-3.5 h-3.5 text-amber-600" />
-                          Contrato Digital de Parceria:
-                        </span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          30% & Boleto Assinado
-                        </span>
-                      </div>
-
-                      <div className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-amber-100 space-y-1">
-                        <p className="flex items-center justify-between">
-                          <span><strong>Repasse Contratual:</strong> 30% por serviço</span>
-                          <span className="text-emerald-700 font-bold">Prazo: 3 dias úteis</span>
-                        </p>
-                        <p className="flex items-center justify-between">
-                          <span><strong>Cláusula de Inadimplência:</strong></span>
-                          <span className="text-red-700 font-bold">Emissão de Boleto + NFS-e</span>
-                        </p>
-                        {prof.contractSignerName && (
-                          <p className="text-[10px] text-slate-500 pt-0.5 border-t border-slate-100">
-                            Signatário: <strong>{prof.contractSignerName}</strong> • CPF: {prof.contractSignerCpf || prof.cpfCnpj}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="pt-0.5 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setContractModalProf(prof)}
-                          className="inline-flex items-center gap-1.5 bg-[#001838] hover:bg-[#002a60] text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-                        >
-                          <FileText className="w-3 h-3 text-amber-400" />
-                          <span>Ver Contrato e Assinatura Digital</span>
-                        </button>
-                        {prof.contractSignedAt && (
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {new Date(prof.contractSignedAt).toLocaleDateString('pt-BR')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Documentos Anexados para Homologação */}
-                    {(prof.docPhotoUrl || (prof.documents && prof.documents.length > 0)) && (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5 text-xs">
-                        <span className="font-bold text-slate-800 flex items-center gap-1.5 text-[11px]">
-                          <FileText className="w-3.5 h-3.5 text-blue-600" />
-                          Documentos Anexados para Análise:
-                        </span>
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {prof.docPhotoUrl && (
-                            <a
-                              href={prof.docPhotoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 border border-slate-300 text-blue-700 font-bold px-2.5 py-1 rounded-lg text-[11px] transition-colors"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>Ver Documento (RG/CNH)</span>
-                            </a>
-                          )}
-                          {prof.documents?.map((doc, dIdx) => (
-                            <a
-                              key={dIdx}
-                              href={doc.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold px-2.5 py-1 rounded-lg text-[11px] transition-colors"
-                            >
-                              <FileCheck className="w-3 h-3 text-emerald-600" />
-                              <span>{doc.label || doc.name}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions Footer with Approval and Delete Options */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
-                    {prof.status !== 'aprovado' && onApproveProfessional && (
-                      <button
-                        onClick={() => onApproveProfessional(prof.id)}
-                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 uppercase shadow-sm"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Aprovar & Homologar</span>
-                      </button>
-                    )}
-
-                    {/* Excluir Profissional Button */}
-                    <button
-                      type="button"
-                      onClick={() => setProfToDelete(prof)}
-                      className="py-2.5 px-3.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-                      title="Excluir cadastro do profissional"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                      <span>Excluir</span>
-                    </button>
-                  </div>
-
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 7: PLATAFORMA DE PAGAMENTO & GATEWAY DE COMISSÕES (30%) */}
-      {/* ========================================================================= */}
-      {activeTab === 'payments' && (
-        <PaymentPlatformView
-          charges={commissionCharges}
-          professionals={professionals}
-          gatewaySettings={currentGatewaySettings}
-          onUpdateChargeStatus={handleUpdateChargeStatus}
-          onIssueBoletoAndNfse={handleIssueBoletoAndNfse}
-          onBlockProfessional={(profId) => {
-            if (onDeleteProfessional) {
-              onDeleteProfessional(profId);
-            }
-          }}
-          onSaveGatewaySettings={handleSaveGatewaySettings}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 8: CATÁLOGO DE SERVIÇOS (GESTÃO & EXCLUSÃO DE SERVIÇOS) */}
-      {/* ========================================================================= */}
-      {activeTab === 'services' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Header toolbar */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-black text-slate-900">Catálogo de Serviços Disponíveis</h3>
-                <span className="bg-amber-100 text-amber-900 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-300">
-                  {services.length} Serviços Ativos
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Gerencie, visualize e exclua serviços oferecidos no aplicativo SM Express.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              {onResetServices && (
-                <button
-                  type="button"
-                  onClick={onResetServices}
-                  className="px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-                  title="Restaurar lista original de serviços"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Restaurar Catálogo</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={serviceSearchTerm}
-              onChange={(e) => setServiceSearchTerm(e.target.value)}
-              placeholder="Buscar serviço por nome, especialidade ou descrição..."
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 shadow-sm focus:outline-none focus:border-amber-400"
-            />
-          </div>
-
-          {/* Services Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {services
-              .filter(s => 
-                s.title.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
-                s.shortDescription.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
-                s.fullDescription.toLowerCase().includes(serviceSearchTerm.toLowerCase())
-              )
-              .map((service) => (
-                <div
-                  key={service.id}
-                  className="bg-white rounded-2xl p-4 border border-slate-200 hover:border-amber-400/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`p-2.5 rounded-xl text-white shadow-sm ${service.color} flex-shrink-0`}>
-                          <ServiceIcon name={service.iconName} className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
-                            {service.title}
-                          </h4>
-                          <span className="text-[10px] font-mono text-slate-400 uppercase">
-                            ID: {service.id}
-                          </span>
-                        </div>
-                      </div>
-
-                      {onDeleteService && (
-                        <button
-                          type="button"
-                          onClick={() => setServiceToDelete(service)}
-                          className="w-8 h-8 rounded-xl bg-red-50 hover:bg-red-600 text-red-500 hover:text-white flex items-center justify-center transition-colors shadow-sm flex-shrink-0"
-                          title="Excluir este serviço"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                      {service.shortDescription}
-                    </p>
-
-                    {service.fields && service.fields.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Campos do Orçamento ({service.fields.length}):
-                        </span>
-                        <div className="flex flex-wrap gap-1">
-                          {service.fields.map((f, i) => (
-                            <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium">
-                              {f.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                    <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                      <CheckCircle className="w-3.5 h-3.5" /> Ativo no Catálogo
-                    </span>
-                    {onDeleteService && (
-                      <button
-                        type="button"
-                        onClick={() => setServiceToDelete(service)}
-                        className="text-red-600 hover:text-red-800 font-bold hover:underline"
-                      >
-                        Excluir
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-          </div>
-
-          {services.length === 0 && (
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
-                <Briefcase className="w-6 h-6" />
-              </div>
-              <h4 className="font-bold text-slate-800">Nenhum serviço cadastrado</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Todos os serviços foram removidos. Clique no botão abaixo para restaurar o catálogo padrão.
-              </p>
-              {onResetServices && (
-                <button
-                  type="button"
-                  onClick={onResetServices}
-                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-colors"
-                >
-                  Restaurar Catálogo Padrão
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 1: EMITIR ORÇAMENTO */}
-      {/* ========================================================================= */}
-      {selectedReqForQuote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 space-y-4">
-            <div className="border-b pb-2 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-slate-900">Emitir Orçamento - {selectedReqForQuote.id}</h3>
-                <p className="text-[11px] text-slate-500 font-semibold">{selectedReqForQuote.serviceTitle} • {selectedReqForQuote.clientName}</p>
-              </div>
-              <button onClick={() => setSelectedReqForQuote(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-            </div>
-
-            {/* Context Info: Address & Photos */}
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
-              <div className="flex items-start justify-between gap-1">
-                <span className="text-slate-600">
-                  📍 {selectedReqForQuote.street}, {selectedReqForQuote.number} - {selectedReqForQuote.neighborhood}, {selectedReqForQuote.city}
-                </span>
-                <a
-                  href={selectedReqForQuote.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedReqForQuote.street}, ${selectedReqForQuote.number}, ${selectedReqForQuote.city}`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 font-bold hover:underline flex items-center gap-0.5 text-[10px] flex-shrink-0"
-                >
-                  <ExternalLink className="w-3 h-3" /> Maps
-                </a>
-              </div>
-
-              {((selectedReqForQuote.photos && selectedReqForQuote.photos.length > 0) || selectedReqForQuote.photoUrl) && (
-                <div className="pt-1 border-t border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-700 block mb-1">
-                    📸 Fotos anexadas pelo cliente ({selectedReqForQuote.photos?.length || 1}):
-                  </span>
-                  <div className="flex gap-1.5 overflow-x-auto py-0.5">
-                    {(selectedReqForQuote.photos || [selectedReqForQuote.photoUrl]).map((img, idx) => (
-                      <a key={idx} href={img} target="_blank" rel="noreferrer" title="Abrir imagem">
-                        <img src={img} alt={`Anexo ${idx + 1}`} className="w-10 h-10 object-cover rounded-lg border border-slate-300" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleSubmitQuote} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Valor Total (R$)</label>
-                <input
-                  type="number"
-                  step="10"
-                  required
-                  value={quotePrice}
-                  onChange={(e) => setQuotePrice(parseFloat(e.target.value))}
-                  className="w-full p-2.5 border rounded-xl"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Tempo Estimado</label>
-                <input
-                  type="text"
-                  required
-                  value={quoteHours}
-                  onChange={(e) => setQuoteHours(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl"
-                  placeholder="Ex: 2 horas"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Profissional Responsável</label>
-                <input
-                  type="text"
-                  required
-                  value={quoteProf}
-                  onChange={(e) => setQuoteProf(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Observações do Orçamento</label>
-                <textarea
-                  rows={2}
-                  value={quoteNotes}
-                  onChange={(e) => setQuoteNotes(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedReqForQuote(null)}
-                  className="px-4 py-2 border rounded-xl text-slate-600 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl shadow"
-                >
-                  ENVIAR ORÇAMENTO
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 2: DOSSIÊ COMPLETO DO USUÁRIO / DETALHES */}
+      {/* MODAL 1: DOSSIÊ COMPLETO DO USUÁRIO / DETALHES DE LOGIN */}
       {/* ========================================================================= */}
       {selectedUserForView && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
@@ -2327,7 +1073,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                     : 'bg-red-100 text-red-800 border border-red-200'
                 }`}>
-                  Status: {selectedUserForView.status}
+                  Status: {selectedUserForView.status === 'ativo' ? 'Acesso Liberado' : 'Acesso Bloqueado'}
                 </span>
 
                 <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
@@ -2339,22 +1085,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </span>
               </div>
 
-              {/* Informações Pessoais */}
+              {/* Informações de Login & Acesso */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                 <h4 className="font-bold text-slate-800 uppercase text-[10px] tracking-wider text-amber-700">
-                  Dados de Identificação & Contato
+                  Credenciais de Autenticação & Contato
                 </h4>
                 <div className="grid grid-cols-2 gap-2 text-slate-600">
-                  <div><strong>E-mail:</strong> {selectedUserForView.email}</div>
+                  <div><strong>E-mail de Login:</strong> {selectedUserForView.email}</div>
                   <div><strong>Telefone/WhatsApp:</strong> {selectedUserForView.phone || 'Não informado'}</div>
+                  <div><strong>Senha:</strong> {selectedUserForView.password || '123456'}</div>
                   <div><strong>CPF/CNPJ:</strong> {selectedUserForView.cpfCnpj || 'Não informado'}</div>
                   <div><strong>RG:</strong> {selectedUserForView.rg || 'Não informado'}</div>
-                  <div><strong>Data de Nascimento:</strong> {selectedUserForView.birthDate || 'Não informada'}</div>
                   <div><strong>Data de Cadastro:</strong> {new Date(selectedUserForView.createdAt).toLocaleDateString('pt-BR')}</div>
                 </div>
               </div>
 
-              {/* Endereço Residencial */}
+              {/* Endereço */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                 <h4 className="font-bold text-slate-800 uppercase text-[10px] tracking-wider text-amber-700">
                   Endereço Cadastrado
@@ -2377,27 +1123,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <p className="mt-0.5">{selectedUserForView.notes}</p>
                 </div>
               )}
-
-              {/* Histórico de Solicitações */}
-              <div className="border-t pt-3">
-                <h4 className="font-bold text-slate-800 mb-2">
-                  Histórico de Solicitações do Usuário ({requests.filter(r => r.clientEmail.toLowerCase() === selectedUserForView.email.toLowerCase()).length})
-                </h4>
-                <div className="max-h-36 overflow-y-auto space-y-1.5">
-                  {requests.filter(r => r.clientEmail.toLowerCase() === selectedUserForView.email.toLowerCase()).map(req => (
-                    <div key={req.id} className="p-2 bg-slate-100 rounded-xl flex justify-between items-center text-[11px]">
-                      <div>
-                        <span className="font-bold text-slate-800">{req.serviceTitle}</span>
-                        <span className="text-slate-500 ml-1.5">({req.id})</span>
-                      </div>
-                      <span className="font-semibold text-emerald-700">
-                        {req.quotedPrice ? `R$ ${req.quotedPrice.toFixed(2)}` : 'Pendente'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
             </div>
 
             <div className="pt-2 flex justify-end gap-2 border-t">
@@ -2410,7 +1135,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                Editar Dados
+                Editar Login & Senha
               </button>
               <button
                 onClick={() => setSelectedUserForView(null)}
@@ -2424,7 +1149,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: CADASTRO NOVO USUÁRIO / EDITAR USUÁRIO */}
+      {/* MODAL 2: CADASTRO NOVO LOGIN / EDITAR LOGIN E SENHA */}
       {/* ========================================================================= */}
       {(isNewUserModalOpen || selectedUserForEdit) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
@@ -2437,10 +1162,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900">
-                    {isNewUserModalOpen ? 'Cadastrar Nova Pessoa no App' : `Editar Cadastro - ${formName}`}
+                    {isNewUserModalOpen ? 'Cadastrar Novo Login / Usuário' : `Editar Login & Credenciais - ${formName}`}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Preencha o formulário completo de dados cadastrais e endereço
+                    Defina papel, status de acesso, senha e dados cadastrais
                   </p>
                 </div>
               </div>
@@ -2489,7 +1214,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Foto 3/4 para ID de Acesso */}
+              {/* Foto 3/4 para Crachá de Acesso */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center gap-3.5">
                 <div
                   onClick={() => formPhotoInputRef.current?.click()}
@@ -2527,7 +1252,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500 leading-tight">
-                    Importe a foto 3/4 do usuário para registro de identidade e liberação de crachá no sistema.
+                    Importe a foto 3/4 para registro de identidade e liberação de crachá de login no sistema.
                   </p>
                   <div className="flex flex-wrap items-center gap-2 pt-0.5 justify-center sm:justify-start">
                     <button
@@ -2559,7 +1284,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Dados Principais */}
+              {/* Dados de Login & Identificação */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Nome Completo *</label>
@@ -2574,21 +1299,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">E-mail *</label>
+                  <label className="block font-bold text-slate-700 mb-1">E-mail de Login *</label>
                   <input
                     type="email"
                     required
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="contato@cliente.com.br"
+                    placeholder="login@email.com.br"
                     className="w-full p-2 bg-white border border-slate-300 rounded-xl"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Senha e Contatos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/50 p-3 rounded-2xl border border-amber-200">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Celular / WhatsApp *</label>
+                  <label className="block font-bold text-slate-800 mb-1 flex items-center gap-1">
+                    <Key className="w-3.5 h-3.5 text-amber-600" />
+                    Senha de Acesso *
+                  </label>
+                  <input
+                    type="text"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder="Defina a senha (ex: 123456)"
+                    className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono"
+                  />
+                  <span className="text-[10px] text-slate-500 block mt-0.5">
+                    O usuário utilizará esta senha para efetuar login no app.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Celular / WhatsApp *</label>
                   <input
                     type="text"
                     required
@@ -2598,7 +1341,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="w-full p-2 bg-white border border-slate-300 rounded-xl"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">CPF ou CNPJ *</label>
                   <input
@@ -2662,7 +1407,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-[10px] text-slate-500 mb-1">
-                      CEP (Preenchimento Automático)
+                      CEP (Busca Automática)
                     </label>
                     <div className="relative">
                       <input
@@ -2763,7 +1508,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   rows={2}
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
-                  placeholder="Observações adicionais sobre o cliente ou prestador..."
+                  placeholder="Observações adicionais sobre o usuário..."
                   className="w-full p-2 bg-white border border-slate-300 rounded-xl"
                 />
               </div>
@@ -2784,7 +1529,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="px-6 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl shadow transition-colors flex items-center gap-1.5"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{isNewUserModalOpen ? 'Cadastrar Pessoa' : 'Salvar Dados'}</span>
+                  <span>{isNewUserModalOpen ? 'Criar Login' : 'Salvar Credenciais'}</span>
                 </button>
               </div>
 
@@ -2794,7 +1539,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 4: CONFIRMAR EXCLUSÃO DE USUÁRIO */}
+      {/* MODAL 3: CONFIRMAR EXCLUSÃO DE CONTA / LOGIN */}
       {/* ========================================================================= */}
       {userToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
@@ -2804,20 +1549,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             
             <div className="text-center space-y-1">
-              <h3 className="font-extrabold text-lg text-slate-900">Excluir Cadastro?</h3>
+              <h3 className="font-extrabold text-lg text-slate-900">Excluir Conta de Login?</h3>
               <p className="text-xs text-slate-500">
-                Tem certeza que deseja remover o cadastro de <strong>{userToDelete.name}</strong> ({userToDelete.email})? Esta ação não pode ser desfeita.
+                Tem certeza que deseja remover o login de <strong>{userToDelete.name}</strong> ({userToDelete.email})? O acesso será revogado permanentemente.
               </p>
             </div>
 
             <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setUserToDelete(null)}
                 className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleConfirmDelete}
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow"
               >
@@ -2829,162 +1576,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 5: CONTRATO DIGITAL & TERMO DE ADESÃO (30% E BOLETO) */}
+      {/* MODAL 4: CONFIRMAR LIMPEZA DE DADOS (APTO AO USO) */}
       {/* ========================================================================= */}
-      {contractModalProf && (
-        <DigitalContractModal
-          isOpen={!!contractModalProf}
-          onClose={() => setContractModalProf(null)}
-          professional={contractModalProf}
-          customSignatureUrl={contractModalProf.contractSignatureUrl}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 6: CONFIRMAR EXCLUSÃO DE PROFISSIONAL */}
-      {/* ========================================================================= */}
-      {profToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-red-200 shadow-2xl space-y-4 text-slate-800">
-            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
-              <Trash2 className="w-7 h-7" />
-            </div>
-            
-            <div className="text-center space-y-2">
-              <h3 className="font-extrabold text-lg text-slate-900">Excluir Cadastro do Profissional?</h3>
-              <div className="p-3 bg-red-50 rounded-2xl border border-red-100 text-xs text-left space-y-1">
-                <div className="flex items-center gap-2">
-                  {(profToDelete.photo3x4Url || profToDelete.photoUrl) ? (
-                    <img
-                      src={profToDelete.photo3x4Url || profToDelete.photoUrl}
-                      alt={profToDelete.fullName}
-                      className="w-8 h-8 rounded-lg object-cover border"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-amber-400 font-bold text-xs flex items-center justify-center border">
-                      {profToDelete.fullName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <strong className="font-bold text-slate-900 block">{profToDelete.fullName}</strong>
-                    <span className="text-[11px] text-slate-500 font-mono">CPF: {profToDelete.cpfCnpj}</span>
-                  </div>
-                </div>
-                <div className="text-[11px] text-slate-600 pt-1 border-t border-red-200/60">
-                  <span>Cidade: <strong>{profToDelete.city}/{profToDelete.state}</strong></span>
-                  <span className="block text-red-700 font-semibold mt-0.5">
-                    Aviso: O profissional, suas especialidades e o vínculo de contrato serão excluídos da base.
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-slate-500">
-                Tem certeza que deseja prosseguir? Esta operação não pode ser revertida.
-              </p>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setProfToDelete(null)}
-                className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteProf}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Sim, Excluir</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 7: CONFIRMAR EXCLUSÃO DE SERVIÇO */}
-      {/* ========================================================================= */}
-      {serviceToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-red-200 shadow-2xl space-y-4 text-slate-800">
-            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
-              <Trash2 className="w-7 h-7" />
-            </div>
-            
-            <div className="text-center space-y-2">
-              <h3 className="font-extrabold text-lg text-slate-900">Excluir Serviço do Catálogo?</h3>
-              <div className="p-3 bg-red-50 rounded-2xl border border-red-100 text-xs text-left space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className={`p-2 rounded-lg text-white ${serviceToDelete.color}`}>
-                    <ServiceIcon name={serviceToDelete.iconName} className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <strong className="font-bold text-slate-900 block">{serviceToDelete.title}</strong>
-                    <span className="text-[11px] text-slate-500 font-mono">ID: {serviceToDelete.id}</span>
-                  </div>
-                </div>
-                <div className="text-[11px] text-slate-600 pt-1 border-t border-red-200/60">
-                  <span className="block text-red-700 font-semibold mt-0.5">
-                    Aviso: Este serviço será removido da tela inicial e os clientes não poderão solicitar orçamentos para ele.
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-slate-500">
-                Tem certeza que deseja prosseguir com a exclusão?
-              </p>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setServiceToDelete(null)}
-                className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onDeleteService && serviceToDelete) {
-                    onDeleteService(serviceToDelete.id);
-                    setServiceToDelete(null);
-                  }
-                }}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Sim, Excluir</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: PURGE ALL DATA (ZERAR BASE DE DADOS) */}
       {isPurgeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-red-200 shadow-2xl space-y-4 text-slate-800">
-            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
-              <AlertTriangle className="w-7 h-7 text-red-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 text-slate-800">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+              <Sparkles className="w-6 h-6" />
             </div>
             
-            <div className="text-center space-y-2">
-              <h3 className="font-extrabold text-lg text-slate-900">Zerar Toda a Base de Dados?</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Esta ação limpará <strong>todas as informações de cadastros</strong>, solicitações de serviços, orçamentos, agendamentos, comissões e histórico, deixando o sistema 100% limpo com zero registros (mantendo apenas o acesso mestre do Administrador).
+            <div className="text-center space-y-1">
+              <h3 className="font-black text-lg text-slate-900">Limpar Dados de Teste & Deixar Apto ao Uso?</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Esta operação irá zerar as solicitações, orçamentos, dados de clientes de teste e cobranças de pagamento, deixando a plataforma 100% limpa e preparada para operações reais.
               </p>
-              <div className="p-3 bg-red-50 rounded-2xl border border-red-100 text-[11px] text-red-700 text-left space-y-1">
-                <span className="font-bold block">Resumo do que será zerado:</span>
-                <ul className="list-disc list-inside space-y-0.5 text-slate-600">
-                  <li>0 solicitações de orçamento e pedidos</li>
-                  <li>0 agendamentos e atendimentos</li>
-                  <li>0 profissionais credenciados</li>
-                  <li>0 faturamento e cobranças de comissão</li>
-                  <li>Reset completo de armazenamento local</li>
-                </ul>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>O que será preservado com segurança:</span>
               </div>
+              <ul className="list-disc list-inside text-[11px] text-slate-600 pl-1">
+                <li>Sua conta master de Administrador (<strong>suportesmservicos@gmail.com</strong>)</li>
+                <li>O catálogo completo de serviços e preços base</li>
+                <li>As configurações de gateway de pagamento</li>
+              </ul>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -2998,15 +1615,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (onPurgeAllData) {
-                    onPurgeAllData();
-                  }
+                  if (onPurgeAllData) onPurgeAllData();
                   setIsPurgeModalOpen(false);
                 }}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-black text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Sim, Limpar Tudo</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirmar & Zerar</span>
               </button>
             </div>
           </div>

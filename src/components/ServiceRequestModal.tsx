@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ServiceDefinition, ServiceRequest, UserAccount, ServiceCategory } from '../types';
+import { compressImage } from '../utils/storage';
 import { 
   X, 
   Calendar, 
@@ -13,9 +14,13 @@ import {
   Phone, 
   User, 
   Sparkles,
-  Bot
+  Bot,
+  MessageSquare,
+  Mail,
+  ExternalLink
 } from 'lucide-react';
 import { ServiceIcon } from './ServiceIcon';
+import { notificationService, NotificationLogItem, ADMIN_EMAIL, ADMIN_WHATSAPP_FORMATTED } from '../services/notificationService';
 
 interface ServiceRequestModalProps {
   isOpen: boolean;
@@ -170,8 +175,6 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
   initialDescription = '',
   onRequireRegister
 }) => {
-  if (!isOpen) return null;
-
   const [description, setDescription] = useState(initialDescription || '');
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -211,25 +214,68 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
     return service || allServices.find(s => s.id === 'outros_servicos') || allServices[0];
   }, [description, service, allServices]);
 
-  // Main Simple Fields
-  const [clientName, setClientName] = useState(currentUser?.name || '');
-  const [clientPhone, setClientPhone] = useState(currentUser?.phone || '');
-  const [locationAddress, setLocationAddress] = useState(
-    currentUser?.street 
-      ? `${currentUser.street}, ${currentUser.number || 'S/N'} - ${currentUser.neighborhood || 'Centro'}, ${currentUser.city || 'Taubaté'}` 
-      : ''
-  );
+  // Phone Mask
+  const formatPhone = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+  };
 
-  // Sync if currentUser updates
+  // Build clean complete address from user account
+  const buildClientAddress = (user?: UserAccount | null): string => {
+    if (!user) return '';
+    const parts: string[] = [];
+    if (user.street && user.street.trim()) {
+      let st = user.street.trim();
+      if (user.number && user.number.trim() && user.number.trim().toUpperCase() !== 'S/N') {
+        st += `, ${user.number.trim()}`;
+      }
+      if (user.complement && user.complement.trim()) {
+        st += ` (${user.complement.trim()})`;
+      }
+      parts.push(st);
+    }
+    if (user.neighborhood && user.neighborhood.trim()) {
+      parts.push(user.neighborhood.trim());
+    }
+    if (user.city && user.city.trim()) {
+      const cityState = user.state ? `${user.city.trim()}/${user.state.trim()}` : user.city.trim();
+      parts.push(cityState);
+    } else if (parts.length > 0) {
+      parts.push('Taubaté/SP');
+    }
+    return parts.join(' - ');
+  };
+
+  // Main Simple Fields - initialized with currentUser if present
+  const [clientName, setClientName] = useState(() => currentUser?.name || '');
+  const [clientPhone, setClientPhone] = useState(() => currentUser?.phone ? formatPhone(currentUser.phone) : '');
+  const [locationAddress, setLocationAddress] = useState(() => buildClientAddress(currentUser));
+
+  // Sync automatic fill whenever modal opens or currentUser updates
   useEffect(() => {
-    if (currentUser) {
-      if (!clientName) setClientName(currentUser.name);
-      if (!clientPhone) setClientPhone(currentUser.phone);
-      if (!locationAddress && currentUser.street) {
-        setLocationAddress(`${currentUser.street}, ${currentUser.number || 'S/N'} - ${currentUser.neighborhood || 'Centro'}, ${currentUser.city || 'Taubaté'}`);
+    if (isOpen) {
+      setIsSuccess(false);
+      setErrors({});
+      if (initialDescription) {
+        setDescription(initialDescription);
+      }
+      if (currentUser) {
+        if (currentUser.name) {
+          setClientName(currentUser.name);
+        }
+        if (currentUser.phone) {
+          setClientPhone(formatPhone(currentUser.phone));
+        }
+        const autoAddr = buildClientAddress(currentUser);
+        if (autoAddr) {
+          setLocationAddress(autoAddr);
+        }
       }
     }
-  }, [currentUser]);
+  }, [isOpen, currentUser, initialDescription]);
 
   const [desiredDate, setDesiredDate] = useState(() => {
     const today = new Date();
@@ -241,16 +287,8 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
   // Photos State (up to 3 photos, optional)
   const [photos, setPhotos] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [latestNotif, setLatestNotif] = useState<NotificationLogItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Phone Mask
-  const formatPhone = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 11);
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
-  };
 
   // Photos handling
   const handleFilesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -264,19 +302,26 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
     }
 
     const filesToRead: File[] = (Array.from(files) as File[]).slice(0, remainingSlots);
-    const newLoadedPhotos: string[] = [];
 
-    filesToRead.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        if (uploadEvent.target?.result) {
-          newLoadedPhotos.push(uploadEvent.target.result as string);
-          if (newLoadedPhotos.length === filesToRead.length) {
-            setPhotos(prev => [...prev, ...newLoadedPhotos].slice(0, 3));
-          }
+    Promise.all(
+      filesToRead.map(async (file) => {
+        try {
+          const compressed = await compressImage(file, 600, 600, 0.65);
+          return compressed || '';
+        } catch {
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve((e.target?.result as string) || '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file);
+          });
         }
-      };
-      reader.readAsDataURL(file);
+      })
+    ).then((compressedList) => {
+      const validPhotos = compressedList.filter(Boolean);
+      if (validPhotos.length > 0) {
+        setPhotos(prev => [...prev, ...validPhotos].slice(0, 3));
+      }
     });
 
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -349,10 +394,11 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
 
     const newRequest: ServiceRequest = {
       id: `REQ-${Math.floor(1000 + Math.random() * 9000)}`,
+      userId: currentUser?.id,
       serviceId: detectedService.id,
       serviceTitle: detectedService.title,
-      clientName: (currentUser?.name || clientName).trim(),
-      clientPhone: (currentUser?.phone || clientPhone).trim(),
+      clientName: clientName.trim() || currentUser?.name || 'Cliente',
+      clientPhone: clientPhone.trim() || currentUser?.phone || '',
       clientEmail: currentUser?.email || 'cliente@smexpress.com.br',
       details: {
         'Descrição do Pedido': description.trim(),
@@ -360,11 +406,12 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
       },
       frequency: 'Avulso',
       desiredDate: desiredDate,
-      street: mainStreet,
-      number: 'S/N',
-      neighborhood: rest,
-      city: 'Taubaté',
-      state: 'SP',
+      street: mainStreet || currentUser?.street || 'Endereço informado',
+      number: currentUser?.number || 'S/N',
+      neighborhood: rest || currentUser?.neighborhood || 'Centro',
+      city: currentUser?.city || 'Taubaté',
+      state: currentUser?.state || 'SP',
+      cep: currentUser?.cep,
       photoUrl: photos[0] || undefined,
       photos: photos,
       googleMapsUrl: fullMapsUrl,
@@ -372,9 +419,13 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
       createdAt: new Date().toISOString()
     };
 
+    const notif = notificationService.notifyNewRequest(newRequest);
+    setLatestNotif(notif);
     onSubmitRequest(newRequest);
     setIsSuccess(true);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in">
@@ -465,11 +516,41 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                 </div>
               </div>
 
+              {/* Logged in client auto-fill information banner */}
+              {currentUser && (
+                <div className="p-3 bg-emerald-50/90 border border-emerald-300/80 rounded-2xl text-xs text-emerald-950 flex items-center justify-between gap-2.5 shadow-sm">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs flex-shrink-0">
+                      ✓
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-extrabold text-slate-900 block text-xs truncate">
+                        Cliente conectado: {currentUser.name}
+                      </span>
+                      <p className="text-[11px] text-emerald-800 leading-snug">
+                        Seus dados foram inseridos automaticamente. Ajuste o endereço abaixo se o serviço for em outro local.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200/80 text-emerald-950 px-2.5 py-1 rounded-full border border-emerald-300 whitespace-nowrap flex-shrink-0">
+                    Dados Preenchidos
+                  </span>
+                </div>
+              )}
+
               {/* 2. Name & WhatsApp (2 columns) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
-                    <span>Seu Nome Completo <span className="text-red-500">*</span></span>
+                    <span className="flex items-center gap-1.5">
+                      <span>Seu Nome Completo</span>
+                      <span className="text-red-500">*</span>
+                      {currentUser?.name && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200 lowercase">
+                          ✓ login
+                        </span>
+                      )}
+                    </span>
                     {errors.clientName && <span className="text-[10px] text-red-600 font-semibold">Obrigatório</span>}
                   </label>
                   <div className="relative">
@@ -492,7 +573,15 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
-                    <span>WhatsApp / Celular <span className="text-red-500">*</span></span>
+                    <span className="flex items-center gap-1.5">
+                      <span>WhatsApp / Celular</span>
+                      <span className="text-red-500">*</span>
+                      {currentUser?.phone && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200 lowercase">
+                          ✓ login
+                        </span>
+                      )}
+                    </span>
                     {errors.clientPhone && <span className="text-[10px] text-red-600 font-semibold">Obrigatório</span>}
                   </label>
                   <div className="relative">
@@ -518,7 +607,15 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
-                    <span>Bairro / Endereço <span className="text-red-500">*</span></span>
+                    <span className="flex items-center gap-1.5">
+                      <span>Bairro / Endereço</span>
+                      <span className="text-red-500">*</span>
+                      {currentUser?.street && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200 lowercase">
+                          ✓ login
+                        </span>
+                      )}
+                    </span>
                     {errors.locationAddress && <span className="text-[10px] text-red-600 font-semibold">Obrigatório</span>}
                   </label>
                   <div className="relative">
@@ -531,7 +628,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                         setLocationAddress(e.target.value);
                         if (errors.locationAddress) setErrors(prev => ({ ...prev, locationAddress: '' }));
                       }}
-                      placeholder="Ex: Jardim América, Taubaté"
+                      placeholder="Ex: Rua das Flores, 120 - Jardim América, Taubaté"
                       className={`w-full pl-9 pr-3 py-2.5 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none ${
                         errors.locationAddress ? 'border-red-500 bg-red-50/20' : 'border-slate-300'
                       }`}
@@ -646,8 +743,45 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                   </span>
                 </div>
                 <p>• <strong>Serviço Identificado:</strong> {detectedService.title}</p>
-                <p>• <strong>WhatsApp:</strong> {clientPhone}</p>
+                <p>• <strong>WhatsApp do Cliente:</strong> {clientPhone}</p>
                 <p>• <strong>Local:</strong> {locationAddress}</p>
+              </div>
+
+              {/* Notificação ao Administrador Cadastrado */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left text-xs space-y-2 text-emerald-950 shadow-sm">
+                <div className="flex items-center justify-between font-black text-emerald-800 text-[11px] uppercase tracking-wider border-b border-emerald-200 pb-1">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Notificação do Administrador Cadastrado
+                  </span>
+                  <span className="bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded text-[10px] font-bold">
+                    DISPARADO
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  Aviso registrado com sucesso para o WhatsApp <strong>{ADMIN_WHATSAPP_FORMATTED}</strong> e e-mail <strong>{ADMIN_EMAIL}</strong>.
+                </p>
+                {latestNotif && (
+                  <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={latestNotif.whatsappUrlAdmin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Abrir WhatsApp do Adm</span>
+                      <ExternalLink className="w-3 h-3 opacity-80" />
+                    </a>
+                    <a
+                      href={latestNotif.mailtoUrlAdmin}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold text-xs transition-colors"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Enviar E-mail ao Adm</span>
+                    </a>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2">

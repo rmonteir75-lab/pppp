@@ -38,6 +38,7 @@ import {
   PenTool
 } from 'lucide-react';
 import { ProfessionalProfile, ServiceDefinition, ServiceCategory, ServiceRate, DocumentItem, ServiceRequest, UserAccount } from '../types';
+import { compressImage } from '../utils/storage';
 import { ProfessionalDemandBoard } from './ProfessionalDemandBoard';
 import { DigitalContractModal } from './DigitalContractModal';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
@@ -270,7 +271,7 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
   // ==========================================
   // File Upload Handlers
   // ==========================================
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -279,15 +280,10 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, photo: 'O arquivo da foto deve ter no máximo 10MB.' }));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setPhotoPreview(event.target.result as string);
+    try {
+      const compressed = await compressImage(file, 400, 400, 0.65);
+      if (compressed) {
+        setPhotoPreview(compressed);
         setPhotoName(file.name);
         setErrors(prev => {
           const next = { ...prev };
@@ -295,17 +291,48 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
           return next;
         });
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setPhotoPreview(event.target.result as string);
+          setPhotoName(file.name);
+          setErrors(prev => {
+            const next = { ...prev };
+            delete next.photo;
+            return next;
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 15 * 1024 * 1024) {
       setErrors(prev => ({ ...prev, document: 'O documento deve ter no máximo 15MB.' }));
       return;
+    }
+
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressed = await compressImage(file, 800, 800, 0.65);
+        if (compressed) {
+          setDocPreview(compressed);
+          setDocName(file.name);
+          setErrors(prev => {
+            const next = { ...prev };
+            delete next.document;
+            return next;
+          });
+          return;
+        }
+      } catch {
+        // Fallback below
+      }
     }
 
     const reader = new FileReader();
@@ -332,29 +359,57 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
       return;
     }
 
-    (Array.from(files) as File[]).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          const sizeKb = (file.size / 1024).toFixed(0);
-          const sizeStr = Number(sizeKb) > 1024 
-            ? `${(Number(sizeKb) / 1024).toFixed(1)} MB` 
-            : `${sizeKb} KB`;
-
-          const newDoc: DocumentItem = {
-            id: `DOC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            name: file.name,
-            type: newDocCategory,
-            label: getDocCategoryLabel(newDocCategory),
-            url: event.target.result as string,
-            uploadedAt: new Date().toISOString(),
-            sizeFormatted: sizeStr
-          };
-
-          setAdditionalDocs(prev => [...prev, newDoc]);
+    (Array.from(files) as File[]).forEach(async (file) => {
+      let fileUrl = '';
+      if (file.type.startsWith('image/')) {
+        try {
+          fileUrl = await compressImage(file, 800, 800, 0.65);
+        } catch {
+          fileUrl = '';
         }
-      };
-      reader.readAsDataURL(file);
+      }
+
+      if (!fileUrl) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            const sizeKb = (file.size / 1024).toFixed(0);
+            const sizeStr = Number(sizeKb) > 1024 
+              ? `${(Number(sizeKb) / 1024).toFixed(1)} MB` 
+              : `${sizeKb} KB`;
+
+            const newDoc: DocumentItem = {
+              id: `DOC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              name: file.name,
+              type: newDocCategory,
+              label: getDocCategoryLabel(newDocCategory),
+              url: event.target.result as string,
+              uploadedAt: new Date().toISOString(),
+              sizeFormatted: sizeStr
+            };
+
+            setAdditionalDocs(prev => [...prev, newDoc]);
+          }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const sizeKb = (file.size / 1024).toFixed(0);
+        const sizeStr = Number(sizeKb) > 1024 
+          ? `${(Number(sizeKb) / 1024).toFixed(1)} MB` 
+          : `${sizeKb} KB`;
+
+        const newDoc: DocumentItem = {
+          id: `DOC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: file.name,
+          type: newDocCategory,
+          label: getDocCategoryLabel(newDocCategory),
+          url: fileUrl,
+          uploadedAt: new Date().toISOString(),
+          sizeFormatted: sizeStr
+        };
+
+        setAdditionalDocs(prev => [...prev, newDoc]);
+      }
     });
 
     if (additionalDocInputRef.current) {

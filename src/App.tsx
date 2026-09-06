@@ -20,7 +20,6 @@ import {
 
 import { Header } from './components/Header';
 import { BannerSection } from './components/BannerSection';
-import { ServicesGrid } from './components/ServicesGrid';
 import { ServiceRequestModal } from './components/ServiceRequestModal';
 import { OrderTracking } from './components/OrderTracking';
 import { ReviewModal } from './components/ReviewModal';
@@ -33,6 +32,8 @@ import { SupabaseSyncModal } from './components/SupabaseSyncModal';
 import { Toast, ToastType } from './components/Toast';
 import { supabaseService } from './services/supabaseService';
 import { isSupabaseConfigured } from './lib/supabase';
+import { safeSetItem, safeRemoveItem } from './utils/storage';
+import { notificationService, ADMIN_EMAIL, ADMIN_WHATSAPP_FORMATTED } from './services/notificationService';
 
 export default function App() {
   // Navigation & Frame Mode
@@ -51,14 +52,60 @@ export default function App() {
   const [forceRegisterInAuth, setForceRegisterInAuth] = useState(false);
   const [authRequiredNotice, setAuthRequiredNotice] = useState<string>('');
 
+  // Production Readiness Purge: Clears any leftover test/mock clients, quotes, requests, and payments.
+  // Preserves only the master Admin account (suportesmservicos@gmail.com) and the service catalog.
+  const PRODUCTION_CLEAN_KEY = 'smexpress_clean_slate_production_v2026_ready';
+
+  const runImmediateProductionReset = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (!localStorage.getItem(PRODUCTION_CLEAN_KEY)) {
+          localStorage.setItem(PRODUCTION_CLEAN_KEY, 'true');
+          localStorage.removeItem('smexpress_requests');
+          localStorage.removeItem('smexpress_professionals');
+          localStorage.removeItem('smexpress_commissions');
+          localStorage.removeItem('smexpress_charges');
+          localStorage.removeItem('smexpress_goal_revenue');
+          localStorage.removeItem('smexpress_goal_services');
+          localStorage.removeItem('smexpress_goal_profs');
+          localStorage.removeItem('smexpress_clean_slate_v3');
+          localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
+          
+          const rawCurrent = localStorage.getItem('smexpress_current_user');
+          if (rawCurrent) {
+            try {
+              const parsed = JSON.parse(rawCurrent);
+              if (parsed?.email !== 'suportesmservicos@gmail.com' && parsed?.email !== 'rmonteir75@gmail.com') {
+                localStorage.removeItem('smexpress_current_user');
+              }
+            } catch {
+              localStorage.removeItem('smexpress_current_user');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error during production reset:', e);
+      }
+    }
+  };
+
+  // Run immediately on script execution
+  runImmediateProductionReset();
+
   // Users & Auth State (Clean State initialized only with Master Admin)
   const [users, setUsers] = useState<UserAccount[]>(() => {
+    runImmediateProductionReset();
     const saved = localStorage.getItem('smexpress_users');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleaned = parsed.filter(u => 
+          const cleaned = parsed.map(u => {
+            if (u.email === 'rmonteir75@gmail.com' || u.id === 'USR-ADM-001') {
+              return { ...u, email: 'suportesmservicos@gmail.com' };
+            }
+            return u;
+          }).filter(u => 
             !['USR-CLI-001', 'USR-PRO-001', 'USR-ADM-999'].includes(u.id) &&
             u.email !== 'admin@smexpress.com' &&
             u.email !== 'joao.cliente@gmail.com' &&
@@ -66,7 +113,7 @@ export default function App() {
             !u.email.toLowerCase().includes('teste') &&
             !u.name.toLowerCase().includes('teste')
           );
-          const hasAdmin = cleaned.some((u: UserAccount) => u.email === 'rmonteir75@gmail.com');
+          const hasAdmin = cleaned.some((u: UserAccount) => u.email === 'suportesmservicos@gmail.com' || u.role === 'admin');
           return hasAdmin ? cleaned : [...INITIAL_USERS, ...cleaned];
         }
       } catch {
@@ -77,14 +124,26 @@ export default function App() {
   });
 
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    runImmediateProductionReset();
     const saved = localStorage.getItem('smexpress_current_user');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed?.email === 'admin@smexpress.com' || parsed?.email?.includes('teste') || parsed?.name?.includes('Teste')) {
-          return INITIAL_USERS[0];
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          parsed.id &&
+          !['USR-CLI-001', 'USR-PRO-001'].includes(parsed.id) &&
+          parsed.email !== 'admin@smexpress.com' &&
+          parsed.email !== 'joao.cliente@gmail.com' &&
+          parsed.email !== 'marcos.piscineiro@smexpress.com'
+        ) {
+          if (parsed.email === 'rmonteir75@gmail.com' || parsed.id === 'USR-ADM-001') {
+            return { ...parsed, email: 'suportesmservicos@gmail.com' };
+          }
+          return parsed;
         }
-        return parsed;
+        return null;
       } catch {
         return null;
       }
@@ -97,6 +156,7 @@ export default function App() {
 
   // App Data State (Clean Production Zero State)
   const [requests, setRequests] = useState<ServiceRequest[]>(() => {
+    runImmediateProductionReset();
     const saved = localStorage.getItem('smexpress_requests');
     if (saved) {
       try {
@@ -126,6 +186,7 @@ export default function App() {
   };
   
   const [professionals, setProfessionals] = useState<ProfessionalProfile[]>(() => {
+    runImmediateProductionReset();
     const saved = localStorage.getItem('smexpress_professionals');
     if (saved) {
       try {
@@ -146,6 +207,7 @@ export default function App() {
   });
 
   const [commissionCharges, setCommissionCharges] = useState<CommissionCharge[]>(() => {
+    runImmediateProductionReset();
     const saved = localStorage.getItem('smexpress_commissions');
     if (saved) {
       try {
@@ -163,38 +225,6 @@ export default function App() {
     }
     return [];
   });
-
-  // Automated clean slate on boot
-  useEffect(() => {
-    const purgeKey = 'smexpress_clean_slate_v3';
-    if (!localStorage.getItem(purgeKey)) {
-      localStorage.setItem(purgeKey, 'true');
-      localStorage.removeItem('smexpress_requests');
-      localStorage.removeItem('smexpress_professionals');
-      localStorage.removeItem('smexpress_commissions');
-      localStorage.removeItem('smexpress_goal_revenue');
-      localStorage.removeItem('smexpress_goal_services');
-      localStorage.removeItem('smexpress_goal_profs');
-      localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
-      setRequests([]);
-      setProfessionals([]);
-      setCommissionCharges([]);
-      setUsers(INITIAL_USERS);
-    }
-  }, []);
-
-  // Save users and current user to localStorage
-  useEffect(() => {
-    localStorage.setItem('smexpress_users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('smexpress_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('smexpress_current_user');
-    }
-  }, [currentUser]);
 
   const [gatewaySettings, setGatewaySettings] = useState<PaymentGatewaySettings>(() => {
     const saved = localStorage.getItem('smexpress_gateway_settings');
@@ -226,25 +256,71 @@ export default function App() {
     return SERVICES_LIST;
   });
 
+  // Active Modals State
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
+  const [selectedServiceForModal, setSelectedServiceForModal] = useState<ServiceDefinition | null>(null);
+  const [requestInitialDescription, setRequestInitialDescription] = useState<string>('');
+  const [clientTab, setClientTab] = useState<'solicitar' | 'pedidos'>('solicitar');
+
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
+  const [selectedRequestForReview, setSelectedRequestForReview] = useState<ServiceRequest | null>(null);
+
+  // Automated clean slate on boot
+  useEffect(() => {
+    const purgeKey = PRODUCTION_CLEAN_KEY;
+    if (!localStorage.getItem(purgeKey)) {
+      safeSetItem(purgeKey, 'true');
+      safeRemoveItem('smexpress_requests');
+      safeRemoveItem('smexpress_professionals');
+      safeRemoveItem('smexpress_commissions');
+      safeRemoveItem('smexpress_charges');
+      safeRemoveItem('smexpress_goal_revenue');
+      safeRemoveItem('smexpress_goal_services');
+      safeRemoveItem('smexpress_goal_profs');
+      safeSetItem('smexpress_users', INITIAL_USERS);
+      setRequests([]);
+      setProfessionals([]);
+      setCommissionCharges([]);
+      setUsers(INITIAL_USERS);
+      if (currentUser && currentUser.email !== 'suportesmservicos@gmail.com' && currentUser.email !== 'rmonteir75@gmail.com') {
+        setCurrentUser(null);
+        safeRemoveItem('smexpress_current_user');
+      }
+    }
+  }, []);
+
+  // Save users and current user to localStorage
+  useEffect(() => {
+    safeSetItem('smexpress_users', users);
+  }, [users]);
+
+  useEffect(() => {
+    if (currentUser) {
+      safeSetItem('smexpress_current_user', currentUser);
+    } else {
+      safeRemoveItem('smexpress_current_user');
+    }
+  }, [currentUser]);
+
   // Save requests, professionals, commissions, gatewaySettings and services to localStorage
   useEffect(() => {
-    localStorage.setItem('smexpress_services', JSON.stringify(services));
+    safeSetItem('smexpress_services', services);
   }, [services]);
 
   useEffect(() => {
-    localStorage.setItem('smexpress_requests', JSON.stringify(requests));
+    safeSetItem('smexpress_requests', requests);
   }, [requests]);
 
   useEffect(() => {
-    localStorage.setItem('smexpress_professionals', JSON.stringify(professionals));
+    safeSetItem('smexpress_professionals', professionals);
   }, [professionals]);
 
   useEffect(() => {
-    localStorage.setItem('smexpress_commissions', JSON.stringify(commissionCharges));
+    safeSetItem('smexpress_commissions', commissionCharges);
   }, [commissionCharges]);
 
   useEffect(() => {
-    localStorage.setItem('smexpress_gateway_settings', JSON.stringify(gatewaySettings));
+    safeSetItem('smexpress_gateway_settings', gatewaySettings);
   }, [gatewaySettings]);
 
   // Load from Supabase on mount if configured
@@ -273,42 +349,27 @@ export default function App() {
     loadDataFromSupabase();
   }, []);
 
-  // Active Modals State
-  const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
-  const [selectedServiceForModal, setSelectedServiceForModal] = useState<ServiceDefinition | null>(null);
-  const [requestInitialDescription, setRequestInitialDescription] = useState<string>('');
-  const [clientTab, setClientTab] = useState<'solicitar' | 'pedidos'>('solicitar');
-
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
-  const [selectedRequestForReview, setSelectedRequestForReview] = useState<ServiceRequest | null>(null);
-
-  // Enforce strict view authorization based on user role
+  // View navigation with proper access control
   const handleViewChange = (requestedView: 'client' | 'admin' | 'professional') => {
-    if (!currentUser) {
-      setCurrentView('client');
+    if (requestedView === 'admin') {
+      if (currentUser?.role === 'admin') {
+        setCurrentView('admin');
+      } else {
+        showToast('Acesso restrito à administração do sistema.', 'error');
+        setAuthModalInitialMode('admin_access');
+        setIsAuthModalOpen(true);
+      }
       return;
     }
-    if (currentUser.role === 'admin') {
-      setCurrentView('admin');
-    } else if (currentUser.role === 'profissional') {
-      setCurrentView('professional');
-    } else {
-      setCurrentView('client');
-    }
+    setCurrentView(requestedView);
   };
 
-  // Sync currentView whenever user logs in, logs out, or switches role
+  // Guard against unauthorized admin access if user logs out or switches
   useEffect(() => {
-    if (!currentUser) {
-      if (currentView !== 'client') setCurrentView('client');
-    } else if (currentUser.role === 'admin') {
-      if (currentView !== 'admin') setCurrentView('admin');
-    } else if (currentUser.role === 'profissional') {
-      if (currentView !== 'professional') setCurrentView('professional');
-    } else {
-      if (currentView !== 'client') setCurrentView('client');
+    if (currentView === 'admin' && currentUser?.role !== 'admin') {
+      setCurrentView('client');
     }
-  }, [currentUser]);
+  }, [currentUser, currentView]);
 
   // Auth Handlers
   const handleLogin = (user: UserAccount) => {
@@ -418,14 +479,19 @@ export default function App() {
     setRequests([]);
     setProfessionals([]);
     setCommissionCharges([]);
-    localStorage.removeItem('smexpress_requests');
-    localStorage.removeItem('smexpress_professionals');
-    localStorage.removeItem('smexpress_commissions');
-    localStorage.removeItem('smexpress_goal_revenue');
-    localStorage.removeItem('smexpress_goal_services');
-    localStorage.removeItem('smexpress_goal_profs');
-    localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
-    showToast('Toda a base de dados, cadastros, solicitações e agendamentos foram completamente zerados.', 'info');
+    safeRemoveItem('smexpress_requests');
+    safeRemoveItem('smexpress_professionals');
+    safeRemoveItem('smexpress_commissions');
+    safeRemoveItem('smexpress_charges');
+    safeRemoveItem('smexpress_goal_revenue');
+    safeRemoveItem('smexpress_goal_services');
+    safeRemoveItem('smexpress_goal_profs');
+    safeSetItem('smexpress_users', INITIAL_USERS);
+    if (currentUser && currentUser.email !== 'suportesmservicos@gmail.com' && currentUser.email !== 'rmonteir75@gmail.com') {
+      setCurrentUser(null);
+      safeRemoveItem('smexpress_current_user');
+    }
+    showToast('Base de dados zerada com sucesso! Cadastros de clientes, orçamentos e pagamentos de teste foram removidos.', 'success');
   };
 
   const handleDeleteService = (serviceId: string) => {
@@ -454,6 +520,8 @@ export default function App() {
     setRequests(prev => [newRequest, ...prev]);
     setClientTab('pedidos'); // Automatically switch to orders tracking
     supabaseService.upsertServiceRequest(newRequest).catch(() => {});
+    notificationService.notifyNewRequest(newRequest);
+    showToast(`Solicitação #${newRequest.id} recebida! Notificações enviadas ao WhatsApp e e-mail (${ADMIN_EMAIL}).`, 'success');
   };
 
   const handleDeleteRequest = (requestId: string) => {
@@ -472,6 +540,8 @@ export default function App() {
     };
     setProfessionals(prev => [createdProf, ...prev]);
     supabaseService.upsertProfessional(createdProf).catch(() => {});
+    notificationService.notifyNewProfessional(createdProf);
+    showToast('Cadastro recebido! O administrador foi notificado via WhatsApp e e-mail para aprovação.', 'success');
   };
 
   const handleApproveProfessional = (profId: string) => {
@@ -498,10 +568,11 @@ export default function App() {
     notes: string,
     scheduledDate?: string
   ) => {
+    let targetQuoteReq: ServiceRequest | undefined;
     setRequests(prev => {
       const updated = prev.map(req => {
         if (req.id === requestId) {
-          return {
+          const updatedReq = {
             ...req,
             quotedPrice: price,
             estimatedHours: hours,
@@ -510,6 +581,8 @@ export default function App() {
             scheduledDate: scheduledDate || req.scheduledDate || req.desiredDate,
             status: 'orcamento_recebido' as RequestStatus
           };
+          targetQuoteReq = updatedReq;
+          return updatedReq;
         }
         return req;
       });
@@ -517,17 +590,25 @@ export default function App() {
       if (target) supabaseService.upsertServiceRequest(target).catch(() => {});
       return updated;
     });
+
+    if (targetQuoteReq) {
+      notificationService.notifyQuoteSent(targetQuoteReq, price, hours, prof, notes, scheduledDate);
+      showToast(`Orçamento de R$ ${price.toFixed(2).replace('.', ',')} enviado! Cliente e administrador notificados via WhatsApp e e-mail.`, 'success');
+    }
   };
 
   const handleApproveQuoteByClient = (requestId: string) => {
+    let approvedReq: ServiceRequest | undefined;
     setRequests(prev => {
       const updated = prev.map(req => {
         if (req.id === requestId) {
-          return {
+          const u = {
             ...req,
             status: 'aprovado' as RequestStatus,
             scheduledDate: req.desiredDate + ' 09:00'
           };
+          approvedReq = u;
+          return u;
         }
         return req;
       });
@@ -570,14 +651,22 @@ export default function App() {
         supabaseService.upsertCommissionCharge(newCharge).catch(() => {});
         return [newCharge, ...prev];
       });
+
+      if (approvedReq) {
+        notificationService.notifyQuoteApproved(approvedReq, prof?.phone);
+        showToast(`Orçamento aprovado! Administrador (${ADMIN_WHATSAPP_FORMATTED}) e prestador notificados via WhatsApp.`, 'success');
+      }
     }
   };
 
   const handleUpdateStatusByAdmin = (requestId: string, newStatus: RequestStatus) => {
+    let updatedTarget: ServiceRequest | undefined;
     setRequests(prev => {
       const updated = prev.map(req => {
         if (req.id === requestId) {
-          return { ...req, status: newStatus };
+          const u = { ...req, status: newStatus };
+          updatedTarget = u;
+          return u;
         }
         return req;
       });
@@ -585,6 +674,11 @@ export default function App() {
       if (target) supabaseService.upsertServiceRequest(target).catch(() => {});
       return updated;
     });
+
+    if (updatedTarget) {
+      notificationService.notifyStatusChanged(updatedTarget, newStatus);
+      showToast(`Status alterado para "${newStatus}". Notificação WhatsApp/E-mail gerada.`, 'info');
+    }
 
     if (newStatus === 'aprovado' || newStatus === 'concluido') {
       const targetReq = requests.find(r => r.id === requestId);
@@ -709,12 +803,71 @@ export default function App() {
           comment,
           createdAt: new Date().toISOString()
         }).catch(() => {});
+        notificationService.notifyNewReview(target, stars, comment);
+        showToast('Avaliação registrada com sucesso! Notificação enviada ao administrador.', 'success');
       }
       return updated;
     });
   };
 
-  const pendingQuotesCount = requests.filter(r => r.status === 'orcamento_recebido').length;
+  // Orders calculation: STRICTLY for the connected/logged-in user account!
+  const userOrdersCount = React.useMemo(() => {
+    if (!currentUser) return 0;
+    const cleanUserPhone = currentUser.phone?.replace(/\D/g, '') || '';
+    const cleanUserEmail = currentUser.email?.toLowerCase().trim() || '';
+    const cleanUserName = currentUser.name?.toLowerCase().trim() || '';
+
+    return requests.filter(r => {
+      // 1. Explicit userId match
+      if (r.userId && currentUser.id && r.userId === currentUser.id) return true;
+      // 2. Email match
+      const rEmail = r.clientEmail?.toLowerCase().trim() || '';
+      if (cleanUserEmail && rEmail && cleanUserEmail === rEmail) return true;
+      // 3. Phone match
+      const rPhone = r.clientPhone?.replace(/\D/g, '') || '';
+      if (cleanUserPhone.length >= 8 && rPhone.length >= 8) {
+        if (cleanUserPhone === rPhone || cleanUserPhone.endsWith(rPhone) || rPhone.endsWith(cleanUserPhone)) {
+          return true;
+        }
+      }
+      // 4. Exact full name match
+      const rName = r.clientName?.toLowerCase().trim() || '';
+      if (cleanUserName && rName && cleanUserName.length >= 4 && cleanUserName !== 'cliente' && cleanUserName === rName) {
+        return true;
+      }
+      return false;
+    }).length;
+  }, [currentUser, requests]);
+
+  // Pending quotes: STRICTLY for the connected/logged-in user account!
+  const pendingQuotesCount = React.useMemo(() => {
+    if (!currentUser) return 0;
+    const cleanUserPhone = currentUser.phone?.replace(/\D/g, '') || '';
+    const cleanUserEmail = currentUser.email?.toLowerCase().trim() || '';
+    const cleanUserName = currentUser.name?.toLowerCase().trim() || '';
+
+    return requests.filter(r => {
+      if (r.status !== 'orcamento_recebido') return false;
+      // 1. Explicit userId match
+      if (r.userId && currentUser.id && r.userId === currentUser.id) return true;
+      // 2. Email match
+      const rEmail = r.clientEmail?.toLowerCase().trim() || '';
+      if (cleanUserEmail && rEmail && cleanUserEmail === rEmail) return true;
+      // 3. Phone match
+      const rPhone = r.clientPhone?.replace(/\D/g, '') || '';
+      if (cleanUserPhone.length >= 8 && rPhone.length >= 8) {
+        if (cleanUserPhone === rPhone || cleanUserPhone.endsWith(rPhone) || rPhone.endsWith(cleanUserPhone)) {
+          return true;
+        }
+      }
+      // 4. Exact full name match
+      const rName = r.clientName?.toLowerCase().trim() || '';
+      if (cleanUserName && rName && cleanUserName.length >= 4 && cleanUserName !== 'cliente' && cleanUserName === rName) {
+        return true;
+      }
+      return false;
+    }).length;
+  }, [currentUser, requests]);
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800 antialiased selection:bg-amber-400 selection:text-slate-950">
@@ -757,7 +910,12 @@ export default function App() {
 
                 <button
                   id="client-tab-orders"
-                  onClick={() => setClientTab('pedidos')}
+                  onClick={() => {
+                    setClientTab('pedidos');
+                    if (!currentUser) {
+                      showToast('Nenhum pedido disponível sem conexão. Faça login ou crie seu cadastro para ver seus pedidos.', 'info');
+                    }
+                  }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black transition-all relative ${
                     clientTab === 'pedidos'
                       ? 'bg-amber-400 text-slate-950 shadow-md'
@@ -765,14 +923,14 @@ export default function App() {
                   }`}
                 >
                   <span>📦 Meus Pedidos</span>
-                  {requests.length > 0 && (
+                  {userOrdersCount > 0 && (
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                       clientTab === 'pedidos' ? 'bg-slate-950 text-amber-400' : 'bg-amber-400 text-slate-950'
                     }`}>
-                      {requests.length}
+                      {userOrdersCount}
                     </span>
                   )}
-                  {pendingQuotesCount > 0 && (
+                  {currentUser && pendingQuotesCount > 0 && (
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute top-2 right-2" />
                   )}
                 </button>
@@ -934,22 +1092,24 @@ export default function App() {
           <div className="flex flex-wrap items-center justify-center gap-2.5">
             <span className="text-slate-400 text-xs font-medium">WhatsApp / Atendimento:</span>
             <a 
-              href="https://wa.me/5512992555104?text=Ol%C3%A1,%20gostaria%20de%20solicitar%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
-              target="_blank" 
-              rel="noreferrer" 
-              className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 text-xs shadow-sm"
-            >
-              <MessageSquare className="w-3.5 h-3.5 fill-emerald-400" />
-              <span>(12) 99255-5104</span>
-            </a>
-            <a 
               href="https://wa.me/5512991601322?text=Ol%C3%A1,%20gostaria%20de%20solicitar%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
               target="_blank" 
               rel="noreferrer" 
               className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 text-xs shadow-sm"
+              title="WhatsApp Oficial SM Express: (12) 99160-1322"
             >
               <MessageSquare className="w-3.5 h-3.5 fill-emerald-400" />
               <span>(12) 99160-1322</span>
+            </a>
+            <a 
+              href="https://wa.me/5512992555104?text=Ol%C3%A1,%20gostaria%20de%20solicitar%20um%20or%C3%A7amento%20com%20a%20SM%20Express!" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5 text-xs shadow-sm"
+              title="WhatsApp Backup SM Express: (12) 99255-5104"
+            >
+              <MessageSquare className="w-3.5 h-3.5 fill-emerald-400" />
+              <span>(12) 99255-5104</span>
             </a>
           </div>
 

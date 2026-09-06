@@ -247,7 +247,7 @@ CREATE POLICY "Allow public access on service_reviews" ON service_reviews FOR AL
 INSERT INTO users (id, email, name, role, phone, avatar, city, state, notes, status)
 VALUES (
     'USR-ADM-001',
-    'rmonteir75@gmail.com',
+    'suportesmservicos@gmail.com',
     'Administrador Geral SM Express',
     'admin',
     '(12) 99700-1000',

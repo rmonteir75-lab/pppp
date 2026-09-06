@@ -16,13 +16,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   request,
   onSubmitReview
 }) => {
-  if (!isOpen || !request) return null;
-
   const [stars, setStars] = useState<number>(5);
   const [hoverStars, setHoverStars] = useState<number>(0);
   const [comment, setComment] = useState<string>(
     'Profissional muito atencioso e serviço de excelente qualidade.'
   );
+
+  if (!isOpen || !request) return null;
 
   const getLabelForRating = (num: number) => {
     switch (num) {

@@ -40,16 +40,16 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   const [copiedPix, setCopiedPix] = useState(false);
   const [copiedBoleto, setCopiedBoleto] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(charge.status === 'pago');
+  const [isSuccess, setIsSuccess] = useState(charge?.status === 'pago');
 
   // Credit Card Form State
   const [cardNumber, setCardNumber] = useState('4532 •••• •••• 8821');
-  const [cardHolder, setCardHolder] = useState(charge.professionalName.toUpperCase());
+  const [cardHolder, setCardHolder] = useState(charge?.professionalName ? charge.professionalName.toUpperCase() : '');
   const [cardExpiry, setCardExpiry] = useState('11/29');
   const [cardCvv, setCardCvv] = useState('789');
   const [installments, setInstallments] = useState('1');
 
-  if (!isOpen) return null;
+  if (!isOpen || !charge) return null;
 
   const pixKeyFallback = charge.pixCopiaCola || `00020126580014br.gov.bcb.pix013654892311000190520400005303986540${charge.commissionValue.toFixed(2)}5802BR5925SM EXPRESS SERVICOS GERA6007TAUBATE62150511COM${charge.id.replace(/\D/g, '')}6304E8A2`;
   const qrCodeUrl = charge.pixQrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(pixKeyFallback)}`;

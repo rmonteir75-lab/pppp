@@ -6,6 +6,7 @@ import {
   CommissionCharge, 
   ServiceDefinition 
 } from '../types';
+import { safeSetItem } from '../utils/storage';
 import { 
   Building2, 
   Target, 
@@ -71,9 +72,9 @@ export const CompanyManagementPanel: React.FC<CompanyManagementPanelProps> = ({
     setRevenueGoal(tempRevenueGoal);
     setServicesGoal(tempServicesGoal);
     setProfsGoal(tempProfsGoal);
-    localStorage.setItem('smexpress_goal_revenue', String(tempRevenueGoal));
-    localStorage.setItem('smexpress_goal_services', String(tempServicesGoal));
-    localStorage.setItem('smexpress_goal_profs', String(tempProfsGoal));
+    safeSetItem('smexpress_goal_revenue', String(tempRevenueGoal));
+    safeSetItem('smexpress_goal_services', String(tempServicesGoal));
+    safeSetItem('smexpress_goal_profs', String(tempProfsGoal));
     setIsEditingGoals(false);
   };
 

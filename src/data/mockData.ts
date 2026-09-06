@@ -14,8 +14,8 @@ export const INITIAL_USERS: UserAccount[] = [
   {
     id: 'USR-ADM-001',
     name: 'Administrador SM Express',
-    email: 'rmonteir75@gmail.com',
-    phone: '(12) 99255-5104',
+    email: 'suportesmservicos@gmail.com',
+    phone: '(12) 99160-1322',
     role: 'admin',
     password: 'Rmonte14*',
     cpfCnpj: '54.892.311/0001-90',
