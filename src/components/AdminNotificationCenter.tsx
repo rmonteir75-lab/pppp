@@ -18,12 +18,16 @@ import {
   Check,
   Wrench,
   Sparkles,
-  Briefcase
+  Briefcase,
+  Globe,
+  Settings,
+  Info
 } from 'lucide-react';
 import { 
   notificationService, 
   NotificationLogItem, 
   ADMIN_EMAIL, 
+  ADMIN_EMAIL_SECONDARY,
   ADMIN_WHATSAPP_FORMATTED,
   ADMIN_WHATSAPP_BACKUP_FORMATTED,
   ADMIN_WHATSAPP_BACKUP,
@@ -34,9 +38,12 @@ import { ServiceRequest, ServiceCategory } from '../types';
 export const AdminNotificationCenter: React.FC = () => {
   const [history, setHistory] = useState<NotificationLogItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('todos');
-  const [testSentMsg, setTestSentMsg] = useState<string | null>(null);
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
-  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => {
+    return localStorage.getItem('smexpress_webhook_url') || '';
+  });
+  const [isWebhookSaved, setIsWebhookSaved] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
 
   const refreshLogs = () => {
     setHistory(notificationService.getNotificationHistory());
@@ -61,155 +68,30 @@ export const AdminNotificationCenter: React.FC = () => {
     setTimeout(() => setCopiedItemId(null), 3000);
   };
 
-  // Simulações operacionais para validação imediata
-  const handleSimulateNewRequest = () => {
-    const dummyReq: ServiceRequest = {
-      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
-      serviceId: 'pequenos_reparos',
-      serviceTitle: 'Instalação Elétrica e Troca de Fiação',
-      clientName: 'Carlos Silva (Teste)',
-      clientPhone: '(12) 99788-1234',
-      clientEmail: 'carlos.teste@gmail.com',
-      details: { 'Descrição': 'Chuveiro parou de esquentar e disjuntor desarmando.', 'Urgência': 'Urgente' },
-      frequency: 'Avulso',
-      desiredDate: new Date().toISOString().split('T')[0],
-      street: 'Av. Charles Schnneider',
-      number: '1250',
-      neighborhood: 'Barranco',
-      city: 'Taubaté',
-      state: 'SP',
-      status: 'pendente_orcamento',
-      createdAt: new Date().toISOString()
-    };
-    notificationService.notifyNewRequest(dummyReq);
-    refreshLogs();
-    setTestSentMsg(`Simulação gerada: Solicitação #${dummyReq.id} disparada para WhatsApp Oficial e E-mail!`);
-    setTimeout(() => setTestSentMsg(null), 6000);
+  const handleOpenWhatsAppOfficial = () => {
+    notificationService.sendTestWhatsApp('official');
+    setTestFeedback(`WhatsApp Oficial (${ADMIN_WHATSAPP_FORMATTED}) acionado com mensagem de validação!`);
+    setTimeout(() => setTestFeedback(null), 6000);
   };
 
-  const handleSimulateQuoteResponse = () => {
-    const dummyReq: ServiceRequest = {
-      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
-      serviceId: 'manutencao_residencial',
-      serviceTitle: 'Higienização de Ar Condicionado Split',
-      clientName: 'Mariana Lima (Teste)',
-      clientPhone: '(12) 99655-4321',
-      clientEmail: 'mariana.teste@gmail.com',
-      details: { 'Descrição': 'Limpeza preventiva e recarga de gás.' },
-      frequency: 'Avulso',
-      desiredDate: new Date().toISOString().split('T')[0],
-      street: 'Rua Visconde de Tremembé',
-      number: '430',
-      neighborhood: 'Centro',
-      city: 'Taubaté',
-      state: 'SP',
-      status: 'orcamento_recebido',
-      quotedPrice: 280,
-      assignedProfessional: 'ClimaTech Refrigeração',
-      createdAt: new Date().toISOString()
-    };
-    notificationService.notifyQuoteSent(dummyReq, 280, '2 horas', 'ClimaTech Refrigeração', 'Higienização completa com bactericida');
-    refreshLogs();
-    setTestSentMsg(`Simulação gerada: Proposta de R$ 280,00 enviada para cliente e registrada no admin!`);
-    setTimeout(() => setTestSentMsg(null), 6000);
+  const handleOpenWhatsAppBackup = () => {
+    notificationService.sendTestWhatsApp('backup');
+    setTestFeedback(`WhatsApp Backup (${ADMIN_WHATSAPP_BACKUP_FORMATTED}) acionado com mensagem de validação!`);
+    setTimeout(() => setTestFeedback(null), 6000);
   };
 
-  const handleSimulateQuoteApproved = () => {
-    const dummyReq: ServiceRequest = {
-      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
-      serviceId: 'manutencao_residencial',
-      serviceTitle: 'Pintura Interna de Apartamento',
-      clientName: 'Roberto Mendes (Teste)',
-      clientPhone: '(12) 99123-8899',
-      clientEmail: 'roberto.mendes@gmail.com',
-      details: { 'Descrição': 'Pintura de 2 quartos e sala com tinta látex.' },
-      frequency: 'Avulso',
-      desiredDate: new Date().toISOString().split('T')[0],
-      street: 'Rua Jacques Félix',
-      number: '88',
-      neighborhood: 'Centro',
-      city: 'Taubaté',
-      state: 'SP',
-      status: 'aprovado',
-      quotedPrice: 650,
-      assignedProfessional: 'Mestre da Pintura Taubaté',
-      createdAt: new Date().toISOString()
-    };
-    notificationService.notifyQuoteApproved(dummyReq, '(12) 99255-5104');
-    refreshLogs();
-    setTestSentMsg(`Simulação gerada: Aprovação de serviço registrada! Adm e prestador notificados.`);
-    setTimeout(() => setTestSentMsg(null), 6000);
+  const handleOpenEmailOfficial = () => {
+    notificationService.sendTestEmail();
+    setTestFeedback(`Cliente de E-mail aberto com mensagem pré-formatada para ${ADMIN_EMAIL} e cópia para ${ADMIN_EMAIL_SECONDARY}!`);
+    setTimeout(() => setTestFeedback(null), 6000);
   };
 
-  const handleSimulateStatusComplete = () => {
-    const dummyReq: ServiceRequest = {
-      id: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
-      serviceId: 'pequenos_reparos',
-      serviceTitle: 'Desentupimento e Troca de Sifão',
-      clientName: 'Fernanda Souza (Teste)',
-      clientPhone: '(12) 99876-5432',
-      clientEmail: 'fernanda.souza@gmail.com',
-      details: { 'Descrição': 'Vazamento na pia da cozinha sanado.' },
-      frequency: 'Avulso',
-      desiredDate: new Date().toISOString().split('T')[0],
-      street: 'Av. Itália',
-      number: '920',
-      neighborhood: 'Independência',
-      city: 'Taubaté',
-      state: 'SP',
-      status: 'concluido',
-      quotedPrice: 190,
-      assignedProfessional: 'Hidráulica Express',
-      createdAt: new Date().toISOString()
-    };
-    notificationService.notifyStatusChanged(dummyReq, 'concluido');
-    refreshLogs();
-    setTestSentMsg(`Simulação gerada: Serviço concluído! Notificação de finalização enviada.`);
-    setTimeout(() => setTestSentMsg(null), 6000);
-  };
-
-  const handleTestWhatsApp = () => {
-    const testMsg = 
-`🔔 *TESTE DE INTEGRAÇÃO (OFICIAL) - SM EXPRESS*
-Olá Administrador (*${ADMIN_EMAIL}*)!
-Este é um teste de confirmação de recebimento de notificações no WhatsApp Oficial *${ADMIN_WHATSAPP_FORMATTED}*.
-Sistema operacional e conectado com sucesso!`;
-    const url = `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(testMsg)}`;
-    notificationService.openWhatsApp(url);
-    setTestSentMsg(`Disparado link de teste para o WhatsApp Oficial (${ADMIN_WHATSAPP_FORMATTED})!`);
-    setTimeout(() => setTestSentMsg(null), 5000);
-  };
-
-  const handleTestWhatsAppBackup = () => {
-    const testMsg = 
-`🔔 *TESTE DE INTEGRAÇÃO (CANAL BACKUP) - SM EXPRESS*
-Olá Administrador (*${ADMIN_EMAIL}*)!
-Este é um teste de confirmação de recebimento de notificações no WhatsApp Backup *${ADMIN_WHATSAPP_BACKUP_FORMATTED}*.
-Sistema operacional e conectado com sucesso!`;
-    const url = `https://wa.me/${ADMIN_WHATSAPP_BACKUP}?text=${encodeURIComponent(testMsg)}`;
-    notificationService.openWhatsApp(url);
-    setTestSentMsg(`Disparado link de teste para o WhatsApp Backup (${ADMIN_WHATSAPP_BACKUP_FORMATTED})!`);
-    setTimeout(() => setTestSentMsg(null), 5000);
-  };
-
-  const handleTestEmail = () => {
-    const subject = `[SM Express] Teste de Notificação Automática para o Administrador`;
-    const body = 
-`Prezado Administrador,
-
-Este é um teste de confirmação do canal de e-mail (${ADMIN_EMAIL}) para recebimento automático de orçamentos, respostas e movimentações de serviços na plataforma SM Express.
-
-Administrador Cadastrado: ${ADMIN_EMAIL}
-WhatsApp Oficial: ${ADMIN_WHATSAPP_FORMATTED}
-WhatsApp Backup: ${ADMIN_WHATSAPP_BACKUP_FORMATTED}
-Data/Hora: ${new Date().toLocaleString('pt-BR')}
-
-Status: Operando Normalmente`;
-
-    const mailto = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    notificationService.openEmail(mailto);
-    setTestSentMsg(`Disparado teste para o E-mail do Administrador (${ADMIN_EMAIL})!`);
-    setTimeout(() => setTestSentMsg(null), 5000);
+  const handleSaveWebhook = () => {
+    localStorage.setItem('smexpress_webhook_url', webhookUrl.trim());
+    setIsWebhookSaved(true);
+    setTimeout(() => setIsWebhookSaved(false), 3000);
+    setTestFeedback('URL de Webhook salva com sucesso! Todas as notificações serão enviadas silenciosamente em JSON para este endereço a cada movimentação.');
+    setTimeout(() => setTestFeedback(null), 6000);
   };
 
   const filteredHistory = history.filter(item => {
@@ -256,16 +138,25 @@ Status: Operando Normalmente`;
           </div>
 
           {/* Dados do Administrador Cadastrado */}
-          <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl space-y-2.5 text-xs min-w-[290px]">
-            <div className="flex items-center gap-2 text-slate-400 font-bold border-b border-slate-800 pb-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Canais de Destino Cadastrados</span>
+          <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-2 text-xs min-w-[310px]">
+            <div className="flex items-center justify-between text-slate-400 font-bold border-b border-slate-800 pb-1.5">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                Canais de Destino Cadastrados
+              </span>
+              <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">ATIVO</span>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-amber-400" /> E-mail Adm:
+                <Mail className="w-3.5 h-3.5 text-amber-400" /> Adm Principal:
               </span>
               <span className="font-mono text-white font-bold">{ADMIN_EMAIL}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-blue-400" /> E-mail Cópia:
+              </span>
+              <span className="font-mono text-blue-300 font-bold">{ADMIN_EMAIL_SECONDARY}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400 flex items-center gap-1.5">
@@ -282,33 +173,33 @@ Status: Operando Normalmente`;
           </div>
         </div>
 
-        {/* Botões de Ação Imediata de Teste */}
+        {/* Canais Oficiais de Ação Imediata & Teste de Conectividade */}
         <div className="mt-5 pt-4 border-t border-slate-800 flex flex-wrap items-center gap-3">
           <button
-            onClick={handleTestWhatsApp}
+            onClick={handleOpenWhatsAppOfficial}
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-transform active:scale-95"
-            title={`Disparar teste para WhatsApp Oficial ${ADMIN_WHATSAPP_FORMATTED}`}
+            title={`Testar e abrir WhatsApp Oficial ${ADMIN_WHATSAPP_FORMATTED}`}
           >
             <MessageCircle className="w-4 h-4" />
-            <span>Testar WhatsApp Oficial {ADMIN_WHATSAPP_FORMATTED}</span>
+            <span>Testar WhatsApp Oficial ({ADMIN_WHATSAPP_FORMATTED})</span>
           </button>
 
           <button
-            onClick={handleTestWhatsAppBackup}
+            onClick={handleOpenWhatsAppBackup}
             className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-xl border border-slate-700 shadow-md flex items-center gap-2 transition-transform active:scale-95"
-            title={`Disparar teste para WhatsApp Backup ${ADMIN_WHATSAPP_BACKUP_FORMATTED}`}
+            title={`Testar e abrir WhatsApp Backup ${ADMIN_WHATSAPP_BACKUP_FORMATTED}`}
           >
             <MessageCircle className="w-4 h-4 text-emerald-400" />
-            <span>Testar Backup {ADMIN_WHATSAPP_BACKUP_FORMATTED}</span>
+            <span>Testar WhatsApp Backup ({ADMIN_WHATSAPP_BACKUP_FORMATTED})</span>
           </button>
 
           <button
-            onClick={handleTestEmail}
+            onClick={handleOpenEmailOfficial}
             className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-transform active:scale-95"
-            title={`Disparar teste para E-mail ${ADMIN_EMAIL}`}
+            title={`Testar e abrir E-mail para ${ADMIN_EMAIL} com cópia para ${ADMIN_EMAIL_SECONDARY}`}
           >
             <Mail className="w-4 h-4" />
-            <span>Testar E-mail {ADMIN_EMAIL}</span>
+            <span>Testar E-mail (Principal + Cópia)</span>
           </button>
 
           <button
@@ -330,97 +221,78 @@ Status: Operando Normalmente`;
           )}
         </div>
 
-        {/* Seletor e Bancada de Simulação Operacional */}
-        <div className="mt-4 pt-4 border-t border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <button
-              onClick={() => setIsSimulatorOpen(!isSimulatorOpen)}
-              className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isSimulatorOpen ? 'Ocultar Bancada de Testes de Notificação' : 'Bancada de Simulação de Disparos em Tempo Real'}</span>
-            </button>
-
-            <span className="text-[11px] text-slate-400">
-              ⚡ Teste os fluxos de mensagens para WhatsApp e E-mail sem precisar criar pedidos reais.
-            </span>
-          </div>
-
-          {isSimulatorOpen && (
-            <div className="mt-3 p-4 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                  <Wrench className="w-3.5 h-3.5" />
-                  Simular Eventos Operacionais (Gera Log e Links Reais)
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  Ambiente Seguro • Dispara para {ADMIN_WHATSAPP_FORMATTED} e {ADMIN_EMAIL}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                <button
-                  onClick={handleSimulateNewRequest}
-                  className="p-3 bg-blue-950/40 hover:bg-blue-900/60 border border-blue-700/50 rounded-xl text-left transition-colors group"
-                >
-                  <div className="text-xs font-bold text-blue-300 flex items-center gap-1.5 group-hover:text-white">
-                    <Send className="w-3.5 h-3.5 text-blue-400" />
-                    <span>1. Nova Solicitação</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    Cliente envia pedido de elétrica. Notifica Adm no WhatsApp e E-mail.
-                  </p>
-                </button>
-
-                <button
-                  onClick={handleSimulateQuoteResponse}
-                  className="p-3 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-700/50 rounded-xl text-left transition-colors group"
-                >
-                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 group-hover:text-white">
-                    <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    <span>2. Orçamento Pronto</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    Adm envia proposta de R$ 280 ao cliente com link de aceite.
-                  </p>
-                </button>
-
-                <button
-                  onClick={handleSimulateQuoteApproved}
-                  className="p-3 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-xl text-left transition-colors group"
-                >
-                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 group-hover:text-white">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>3. Aprovação Cliente</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    Cliente aprova proposta. Notifica Adm e aciona o prestador.
-                  </p>
-                </button>
-
-                <button
-                  onClick={handleSimulateStatusComplete}
-                  className="p-3 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-700/50 rounded-xl text-left transition-colors group"
-                >
-                  <div className="text-xs font-bold text-purple-300 flex items-center gap-1.5 group-hover:text-white">
-                    <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-                    <span>4. Serviço Concluído</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    Conclusão do serviço e solicitação de avaliação ao cliente.
-                  </p>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {testSentMsg && (
-          <div className="mt-3 p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center gap-2 font-bold animate-fade-in">
+        {/* Feedback do Teste */}
+        {testFeedback && (
+          <div className="mt-3 p-3 bg-emerald-950/80 border border-emerald-600 rounded-xl text-xs text-emerald-200 flex items-center gap-2 animate-fade-in">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>{testSentMsg}</span>
+            <span>{testFeedback}</span>
           </div>
         )}
+
+        {/* Status de Operação em Produção */}
+        <div className="mt-3 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Ambiente: <strong className="text-emerald-400 font-bold">Produção Ativo</strong> • Registro e disparos prontos para atendimento</span>
+          </div>
+          <span className="font-mono text-[10px] text-slate-500">
+            Fila de Logs: {history.length} {history.length === 1 ? 'registro' : 'registros'}
+          </span>
+        </div>
+      </div>
+
+      {/* Painel de Informação Operacional & Automação via Webhook */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+            <Info className="w-4 h-4 text-blue-600" />
+            <span>Entendendo o Funcionamento das Notificações & Automação Opcional</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600 leading-relaxed">
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
+            <strong className="text-slate-800 font-bold flex items-center gap-1.5">
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+              1. Notificações no Navegador / Dispositivo:
+            </strong>
+            <p>
+              O sistema gera a mensagem completa de cada solicitação, proposta ou aprovação e aciona a API do WhatsApp (<code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">wa.me</code>) para envio direto ao número <strong>(12) 99160-1322</strong>, além de links <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">mailto:</code> com destino aos e-mails cadastrados.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
+            <strong className="text-slate-800 font-bold flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-blue-600" />
+              2. Disparo Silencioso em Segundo Plano (Webhook):
+            </strong>
+            <p>
+              Para envio 100% automático sem depender da abertura do WhatsApp no navegador, você pode conectar uma URL de Webhook (como Evolution API, Z-API, n8n, Make ou backend próprio).
+            </p>
+          </div>
+        </div>
+
+        {/* Configuração de Webhook */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-2">
+          <div className="relative flex-1 w-full">
+            <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="url"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              placeholder="https://seu-servidor.com/webhook-notificacoes (opcional para envio 100% silencioso)"
+              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveWebhook}
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+          >
+            {isWebhookSaved ? <Check className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
+            <span>{isWebhookSaved ? 'Salvo!' : 'Salvar Webhook'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Seletor de Filtro de Notificações */}

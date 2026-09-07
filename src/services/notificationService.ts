@@ -30,11 +30,17 @@ export interface NotificationLogItem {
 }
 
 export const ADMIN_EMAIL = 'suportesmservicos@gmail.com';
+export const ADMIN_EMAIL_SECONDARY = 'rmonteir75@gmail.com';
+export const ADMIN_EMAILS_ALL = 'suportesmservicos@gmail.com, rmonteir75@gmail.com';
 export const ADMIN_WHATSAPP = '5512991601322'; // (12) 99160-1322 WhatsApp Oficial
 export const ADMIN_WHATSAPP_FORMATTED = '(12) 99160-1322';
 export const ADMIN_WHATSAPP_BACKUP = '5512992555104'; // (12) 99255-5104 WhatsApp Backup
 export const ADMIN_WHATSAPP_BACKUP_FORMATTED = '(12) 99255-5104';
 export const ADMIN_WHATSAPP_SECONDARY = '5512992555104'; // compatibilidade
+
+export function buildAdminMailto(subject: string, body: string): string {
+  return `mailto:${ADMIN_EMAIL}?cc=${ADMIN_EMAIL_SECONDARY}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
 
 /**
  * Normaliza e gera URL correta para o WhatsApp, evitando duplicação do DDI 55
@@ -66,9 +72,47 @@ class NotificationService {
   public getNotificationHistory(): NotificationLogItem[] {
     try {
       const data = localStorage.getItem(this.storageKey);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed: NotificationLogItem[] = JSON.parse(data);
+      if (!Array.isArray(parsed)) return [];
+      // Filtra estritamente apenas notificações reais em produção
+      return parsed.filter(item => 
+        item &&
+        item.id &&
+        !item.id.startsWith('SIM-') && 
+        !(item.requestId && item.requestId.startsWith('SIM-')) &&
+        !item.title?.toLowerCase().includes('simula') &&
+        !item.description?.toLowerCase().includes('(teste)')
+      );
     } catch {
       return [];
+    }
+  }
+
+  private async dispatchWebhook(item: NotificationLogItem) {
+    try {
+      const webhookUrl = localStorage.getItem('smexpress_webhook_url');
+      if (webhookUrl && webhookUrl.trim().startsWith('http')) {
+        await fetch(webhookUrl.trim(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: item.type,
+            id: item.id,
+            requestId: item.requestId,
+            title: item.title,
+            description: item.description,
+            timestamp: item.timestamp,
+            adminEmail: item.adminEmail,
+            adminWhatsApp: item.adminWhatsApp,
+            clientWhatsApp: item.clientWhatsApp,
+            messageAdmin: item.messageContentAdmin,
+            messageClient: item.messageContentClient
+          })
+        });
+      }
+    } catch {
+      // Silent webhook dispatch fallback
     }
   }
 
@@ -77,6 +121,7 @@ class NotificationService {
       const history = this.getNotificationHistory();
       const updated = [item, ...history].slice(0, 100); // keep last 100
       localStorage.setItem(this.storageKey, JSON.stringify(updated));
+      this.dispatchWebhook(item);
     } catch {
       // Fallback
     }
@@ -96,12 +141,51 @@ class NotificationService {
 
   public openWhatsApp(url: string) {
     if (!url) return;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      window.location.href = url;
+    }
   }
 
   public openEmail(mailtoUrl: string) {
     if (!mailtoUrl) return;
-    window.location.href = mailtoUrl;
+    try {
+      window.location.href = mailtoUrl;
+    } catch {
+      // Silent mail client fallback
+    }
+  }
+
+  public sendTestWhatsApp(target: 'official' | 'backup' = 'official') {
+    const phone = target === 'official' ? ADMIN_WHATSAPP : ADMIN_WHATSAPP_BACKUP;
+    const phoneFormatted = target === 'official' ? ADMIN_WHATSAPP_FORMATTED : ADMIN_WHATSAPP_BACKUP_FORMATTED;
+    const msg = 
+`✅ *VALIDAÇÃO DE NOTIFICAÇÃO - SM EXPRESS*
+Olá Administrador!
+Canal verificado com sucesso no WhatsApp ${phoneFormatted}.
+O sistema de emissão de orçamentos e pedidos em modo produção está ativo e pronto para receber clientes.
+Data/Hora: ${new Date().toLocaleString('pt-BR')}`;
+    const url = formatWhatsAppUrl(phone, msg);
+    this.openWhatsApp(url);
+  }
+
+  public sendTestEmail() {
+    const subject = `[SM Express] Teste de Notificação dos Canais Administrativos`;
+    const body = 
+`TESTE DE VALIDAÇÃO DE E-MAIL - SM EXPRESS
+
+Olá Administrador,
+
+Este é um disparo de teste para validar o recebimento de notificações no e-mail:
+- Destinatário Principal: ${ADMIN_EMAIL}
+- Cópia / Notificação: ${ADMIN_EMAIL_SECONDARY}
+
+Todas as movimentações reais no aplicativo (novas solicitações, propostas enviadas, aceites de serviços e comissões) geram mensagens direcionadas para estes canais.
+
+Data/Hora: ${new Date().toLocaleString('pt-BR')}`;
+    const mailto = buildAdminMailto(subject, body);
+    this.openEmail(mailto);
   }
 
   /**
@@ -172,7 +256,7 @@ ${req.photos?.length ? `Fotos anexadas pelo cliente: ${req.photos.length} foto(s
 Acesse o Painel Administrativo SM Express para enviar a proposta:
 https://wa.me/${ADMIN_WHATSAPP}`;
 
-    const mailtoUrl = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = buildAdminMailto(emailSubject, emailBody);
 
     const logItem: NotificationLogItem = {
       id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -256,7 +340,7 @@ Observações: ${notes || 'Nenhuma'}
 
 Notificação via WhatsApp enviada ao cliente.`;
 
-    const mailtoUrl = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = buildAdminMailto(emailSubject, emailBody);
 
     const logItem: NotificationLogItem = {
       id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -339,7 +423,7 @@ Data Agendada: ${req.scheduledDate || req.desiredDate}
 
 Cobrança de comissão (30%) lançada com vencimento em 3 dias úteis.`;
 
-    const mailtoUrl = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = buildAdminMailto(emailSubject, emailBody);
 
     const logItem: NotificationLogItem = {
       id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -433,7 +517,7 @@ Horário: ${new Date().toLocaleString('pt-BR')}
 
 Acompanhe os detalhes no Painel Administrativo.`;
 
-    const mailtoUrl = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = buildAdminMailto(emailSubject, emailBody);
 
     const logItem: NotificationLogItem = {
       id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -501,7 +585,7 @@ Data do Cadastro: ${new Date().toLocaleString('pt-BR')}
 
 Acesse o Painel Administrativo para aprovar o cadastro e liberar o mural de demandas.`;
 
-    const mailtoUrl = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = buildAdminMailto(emailSubject, emailBody);
 
     const logItem: NotificationLogItem = {
       id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -560,7 +644,7 @@ ${comment || 'Nenhum'}
 
 Data: ${new Date().toLocaleString('pt-BR')}`;
 
-    const mailtoUrl = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = buildAdminMailto(emailSubject, emailBody);
 
     const logItem: NotificationLogItem = {
       id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,

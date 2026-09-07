@@ -29,7 +29,10 @@ import {
   ChevronUp,
   ExternalLink,
   ShieldCheck,
-  Check
+  Check,
+  Trash2,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { 
   ServiceRequest, 
@@ -56,6 +59,14 @@ interface AdminReportsCenterProps {
   services?: ServiceDefinition[];
   initialReportType?: ReportType;
   onPurgeAllData?: () => void;
+  onDeleteRequest?: (requestId: string) => void;
+  onDeleteUser?: (userId: string) => void;
+  onDeleteProfessional?: (profId: string) => void;
+  onDeleteCharge?: (chargeId: string) => void;
+  onBatchDeleteRequests?: (requestIds: string[]) => void;
+  onBatchDeleteUsers?: (userIds: string[]) => void;
+  onBatchDeleteCharges?: (chargeIds: string[]) => void;
+  onBatchDeleteProfessionals?: (profIds: string[]) => void;
 }
 
 export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
@@ -65,7 +76,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
   users = [],
   services = [],
   initialReportType,
-  onPurgeAllData
+  onPurgeAllData,
+  onDeleteRequest,
+  onDeleteUser,
+  onDeleteProfessional,
+  onDeleteCharge,
+  onBatchDeleteRequests,
+  onBatchDeleteUsers,
+  onBatchDeleteCharges,
+  onBatchDeleteProfessionals,
 }) => {
   // Report Selection State
   const [selectedReportType, setSelectedReportType] = useState<ReportType>(initialReportType || 'clientes_solicitacoes');
@@ -103,6 +122,146 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
 
   // Print / Preview Modal State
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+
+  // Multi-item selection & zeroing state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [isZeroSelectedModalOpen, setIsZeroSelectedModalOpen] = useState(false);
+  const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
+
+  // Clear selections when switching tab or view mode
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectedReportType, clientViewMode]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (ids: string[]) => {
+    setSelectedIds(prev => {
+      const allSelected = ids.length > 0 && ids.every(id => prev.has(id));
+      if (allSelected) {
+        return new Set();
+      } else {
+        return new Set(ids);
+      }
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleConfirmPurgeAll = () => {
+    if (onPurgeAllData) {
+      onPurgeAllData();
+    }
+    setSelectedIds(new Set());
+    setIsPurgeModalOpen(false);
+    setFeedbackNotice('Todo o sistema foi zerado com sucesso! Todos os 4 cartões e métricas retornaram a zero.');
+    setTimeout(() => setFeedbackNotice(null), 5000);
+  };
+
+  const handleConfirmZeroSelected = () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+
+    if (selectedReportType === 'clientes_solicitacoes') {
+      if (clientViewMode === 'agrupado') {
+        if (onBatchDeleteUsers) {
+          onBatchDeleteUsers(ids);
+        } else if (onDeleteUser) {
+          ids.forEach(id => onDeleteUser(id));
+        }
+      } else {
+        if (onBatchDeleteRequests) {
+          onBatchDeleteRequests(ids);
+        } else if (onDeleteRequest) {
+          ids.forEach(id => onDeleteRequest(id));
+        }
+      }
+    } else if (selectedReportType === 'orcamentos' || selectedReportType === 'aceites' || selectedReportType === 'consolidado') {
+      if (onBatchDeleteRequests) {
+        onBatchDeleteRequests(ids);
+      } else if (onDeleteRequest) {
+        ids.forEach(id => onDeleteRequest(id));
+      }
+    } else if (selectedReportType === 'comissoes') {
+      if (onBatchDeleteCharges) {
+        onBatchDeleteCharges(ids);
+      } else if (onDeleteCharge) {
+        ids.forEach(id => onDeleteCharge(id));
+      }
+    } else if (selectedReportType === 'prestadores') {
+      if (onBatchDeleteProfessionals) {
+        onBatchDeleteProfessionals(ids);
+      } else if (onDeleteProfessional) {
+        ids.forEach(id => onDeleteProfessional(id));
+      }
+    }
+
+    setSelectedIds(new Set());
+    setIsZeroSelectedModalOpen(false);
+    setFeedbackNotice(`${ids.length} item(ns) selecionado(s) foram zerados e excluídos com sucesso.`);
+    setTimeout(() => setFeedbackNotice(null), 5000);
+  };
+
+  const handleSingleZeroClient = (clientId: string, clientName: string) => {
+    if (window.confirm(`Deseja zerar e excluir o cliente "${clientName}" e todas as suas solicitações?`)) {
+      if (onBatchDeleteUsers) {
+        onBatchDeleteUsers([clientId]);
+      } else if (onDeleteUser) {
+        onDeleteUser(clientId);
+      }
+      setFeedbackNotice(`Cliente "${clientName}" zerado com sucesso.`);
+      setTimeout(() => setFeedbackNotice(null), 4000);
+    }
+  };
+
+  const handleSingleZeroRequest = (requestId: string) => {
+    if (window.confirm(`Deseja zerar a solicitação #${requestId}?`)) {
+      if (onBatchDeleteRequests) {
+        onBatchDeleteRequests([requestId]);
+      } else if (onDeleteRequest) {
+        onDeleteRequest(requestId);
+      }
+      setFeedbackNotice(`Solicitação #${requestId} zerada.`);
+      setTimeout(() => setFeedbackNotice(null), 4000);
+    }
+  };
+
+  const handleSingleZeroCharge = (chargeId: string) => {
+    if (window.confirm(`Deseja zerar a cobrança de comissão #${chargeId}?`)) {
+      if (onBatchDeleteCharges) {
+        onBatchDeleteCharges([chargeId]);
+      } else if (onDeleteCharge) {
+        onDeleteCharge(chargeId);
+      }
+      setFeedbackNotice(`Cobrança #${chargeId} zerada.`);
+      setTimeout(() => setFeedbackNotice(null), 4000);
+    }
+  };
+
+  const handleSingleZeroProfessional = (profId: string, profName: string) => {
+    if (window.confirm(`Deseja zerar o cadastro do prestador "${profName}"?`)) {
+      if (onBatchDeleteProfessionals) {
+        onBatchDeleteProfessionals([profId]);
+      } else if (onDeleteProfessional) {
+        onDeleteProfessional(profId);
+      }
+      setFeedbackNotice(`Prestador "${profName}" zerado.`);
+      setTimeout(() => setFeedbackNotice(null), 4000);
+    }
+  };
 
   // Helper date parsing
   const isDateInRange = (dateStr?: string) => {
@@ -914,8 +1073,28 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
           </div>
         </div>
 
-        {/* Quick Export Controls */}
+        {/* Quick Export & System Reset Controls */}
         <div className="flex flex-wrap items-center gap-2">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setIsZeroSelectedModalOpen(true)}
+              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 animate-pulse"
+              title="Zerar e excluir permanentemente os itens selecionados"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Zerar Selecionados ({selectedIds.size})</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsPurgeModalOpen(true)}
+            className="px-3.5 py-2 bg-red-950/80 hover:bg-red-700 text-red-200 hover:text-white text-xs font-bold rounded-xl border border-red-500/40 transition-colors flex items-center gap-1.5 shadow-sm"
+            title="Limpar todos os dados operacionais, pedidos e clientes para reiniciar em zero absoluto"
+          >
+            <Trash2 className="w-4 h-4 text-red-400" />
+            <span>Zerar Todo o Sistema</span>
+          </button>
+
           <button
             onClick={() => setIsPreviewModalOpen(true)}
             className="px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl border border-amber-400/40 transition-colors flex items-center gap-1.5 shadow-sm"
@@ -935,6 +1114,19 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Floating Feedback Alert */}
+      {feedbackNotice && (
+        <div className="bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-lg font-black text-xs flex items-center justify-between gap-3 animate-fade-in border border-emerald-400">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-slate-950 flex-shrink-0" />
+            <span>{feedbackNotice}</span>
+          </div>
+          <button onClick={() => setFeedbackNotice(null)} className="p-1 hover:bg-emerald-600/30 rounded-lg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Navigation Tabs for Report Types */}
       <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto gap-1.5">
@@ -1031,6 +1223,61 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* System Zero / Operational Status Strip */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          {(clientsData.length === 0 && requests.length === 0 && charges.length === 0) ? (
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold flex-shrink-0">
+              <Check className="w-4 h-4" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          )}
+          <div>
+            <div className="font-extrabold text-slate-900 flex items-center gap-2">
+              <span>Status dos Dados & Indicadores:</span>
+              {(clientsData.length === 0 && requests.length === 0 && charges.length === 0) ? (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] uppercase tracking-wider font-black">
+                  100% ZERADO E PRONTO
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] uppercase tracking-wider font-black">
+                  DADOS EM OPERAÇÃO
+                </span>
+              )}
+            </div>
+            <p className="text-slate-500 text-[11px] mt-0.5">
+              {(clientsData.length === 0 && requests.length === 0 && charges.length === 0)
+                ? 'Todos os 4 cartões de indicadores estão em zero (0 clientes, 0 serviços realizados, R$ 0,00 de volume, R$ 0,00 de ticket médio). Base limpa para uso imediato.'
+                : `Existem ${clientsData.length} clientes, ${requests.length} solicitações e ${charges.length} cobranças registradas no sistema.`
+              }
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setIsZeroSelectedModalOpen(true)}
+              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Zerar Selecionados ({selectedIds.size})</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsPurgeModalOpen(true)}
+            className="px-3.5 py-2 bg-slate-900 hover:bg-red-700 text-amber-400 hover:text-white font-black text-xs rounded-xl transition-all border border-amber-500/30 flex items-center gap-1.5 shadow-sm"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Zerar Todo o Sistema</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Control Bar */}
@@ -1248,6 +1495,38 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
           </div>
         </div>
 
+        {/* Batch Action Bar when items are selected */}
+        {selectedIds.size > 0 && (
+          <div className="bg-amber-500/15 border-b border-amber-300 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center text-xs shadow-xs">
+                {selectedIds.size}
+              </span>
+              <span className="font-extrabold text-slate-900">
+                {selectedIds.size} item(ns) selecionado(s) na tabela
+              </span>
+              <span className="text-slate-500 hidden sm:inline">
+                • Escolha se deseja desmarcar ou zerar permanentemente os itens
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={clearSelection}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-xl border border-slate-300 transition-colors shadow-xs"
+              >
+                Desmarcar Todos
+              </button>
+              <button
+                onClick={() => setIsZeroSelectedModalOpen(true)}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Zerar e Excluir Selecionados ({selectedIds.size})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 0. TABLE: Clientes & Solicitações de Serviços Realizadas */}
         {selectedReportType === 'clientes_solicitacoes' && (
           <div className="space-y-0">
@@ -1302,7 +1581,16 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                   <table className="w-full text-left text-xs text-slate-700">
                     <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                       <tr>
-                        <th className="py-3 px-4 w-10 text-center">#</th>
+                        <th className="py-3 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={clientsData.length > 0 && clientsData.every(item => selectedIds.has(item.client.id))}
+                            onChange={() => toggleSelectAll(clientsData.map(item => item.client.id))}
+                            className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                            title="Selecionar todos os clientes visíveis"
+                          />
+                        </th>
+                        <th className="py-3 px-3 w-8 text-center">#</th>
                         <th className="py-3 px-4">Cliente / Documento</th>
                         <th className="py-3 px-4">Contatos</th>
                         <th className="py-3 px-4">Endereço Cadastrado</th>
@@ -1324,10 +1612,19 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                         return (
                           <React.Fragment key={c.id}>
                             <tr 
-                              className={`hover:bg-amber-50/40 transition-colors cursor-pointer ${isExpanded ? 'bg-amber-50/60 font-semibold' : ''}`}
+                              className={`hover:bg-amber-50/40 transition-colors cursor-pointer ${isExpanded ? 'bg-amber-50/60 font-semibold' : ''} ${selectedIds.has(c.id) ? 'bg-amber-100/40' : ''}`}
                               onClick={() => toggleClientExpanded(c.id)}
                             >
-                              <td className="py-3 px-4 text-center">
+                              <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(c.id)}
+                                  onChange={() => toggleSelect(c.id)}
+                                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                                />
+                              </td>
+
+                              <td className="py-3 px-3 text-center">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1422,20 +1719,29 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                               </td>
 
                               <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  onClick={() => toggleClientExpanded(c.id)}
-                                  className="px-2.5 py-1 bg-slate-100 hover:bg-amber-400 hover:text-slate-950 text-slate-700 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 mx-auto"
-                                >
-                                  <span>{isExpanded ? 'Ocultar' : 'Ver Solicitações'}</span>
-                                  <span className="px-1 bg-slate-200 rounded text-[9px]">{item.requests.length}</span>
-                                </button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => toggleClientExpanded(c.id)}
+                                    className="px-2.5 py-1 bg-slate-100 hover:bg-amber-400 hover:text-slate-950 text-slate-700 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1"
+                                  >
+                                    <span>{isExpanded ? 'Ocultar' : 'Ver Solicitações'}</span>
+                                    <span className="px-1 bg-slate-200 rounded text-[9px]">{item.requests.length}</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleSingleZeroClient(c.id, c.name)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Zerar e excluir este cliente e seus pedidos"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
 
                             {/* Sub-row: Expandable details of client's requests */}
                             {isExpanded && (
                               <tr className="bg-amber-50/20 border-y border-amber-200/60">
-                                <td colSpan={8} className="p-4 sm:p-5">
+                                <td colSpan={9} className="p-4 sm:p-5">
                                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
                                       <div>
@@ -1556,6 +1862,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                   <table className="w-full text-left text-xs text-slate-700">
                     <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                       <tr>
+                        <th className="py-3 px-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={allRealizedRequests.length > 0 && allRealizedRequests.every(r => selectedIds.has(r.id))}
+                            onChange={() => toggleSelectAll(allRealizedRequests.map(r => r.id))}
+                            className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                            title="Selecionar todos os serviços realizados visíveis"
+                          />
+                        </th>
                         <th className="py-3 px-4">ID Pedido</th>
                         <th className="py-3 px-4">Data / Hora</th>
                         <th className="py-3 px-4">Cliente / Contato</th>
@@ -1565,6 +1880,7 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                         <th className="py-3 px-4 text-right">Valor do Serviço</th>
                         <th className="py-3 px-4 text-right">Comissão 30%</th>
                         <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-center">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1577,7 +1893,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                         const cleanPhone = (r.clientPhone || '').replace(/\D/g, '');
 
                         return (
-                          <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                          <tr key={r.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(r.id) ? 'bg-amber-100/40' : ''}`}>
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(r.id)}
+                                onChange={() => toggleSelect(r.id)}
+                                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                              />
+                            </td>
                             <td className="py-3 px-4 font-mono font-bold text-slate-900">
                               {r.id}
                             </td>
@@ -1630,6 +1954,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                                 {r.status.replace('_', ' ')}
                               </span>
                             </td>
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => handleSingleZeroRequest(r.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Zerar e excluir esta solicitação"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
@@ -1654,6 +1987,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredQuotes.length > 0 && filteredQuotes.every(q => selectedIds.has(q.id))}
+                        onChange={() => toggleSelectAll(filteredQuotes.map(q => q.id))}
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        title="Selecionar todos os orçamentos visíveis"
+                      />
+                    </th>
                     <th className="py-3 px-4">ID Pedido</th>
                     <th className="py-3 px-4">Data / Hora</th>
                     <th className="py-3 px-4">Cliente / Contato</th>
@@ -1661,11 +2003,20 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                     <th className="py-3 px-4">Prestador</th>
                     <th className="py-3 px-4 text-right">Valor Orçado</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredQuotes.map((q) => (
-                    <tr key={q.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={q.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(q.id) ? 'bg-amber-100/40' : ''}`}>
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(q.id)}
+                          onChange={() => toggleSelect(q.id)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4 font-mono font-bold text-slate-900">
                         {q.id}
                       </td>
@@ -1704,6 +2055,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                           {q.status.replace('_', ' ')}
                         </span>
                       </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => handleSingleZeroRequest(q.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Zerar e excluir este orçamento"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1725,6 +2085,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredAcceptances.length > 0 && filteredAcceptances.every(a => selectedIds.has(a.id))}
+                        onChange={() => toggleSelectAll(filteredAcceptances.map(a => a.id))}
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        title="Selecionar todos os aceites visíveis"
+                      />
+                    </th>
                     <th className="py-3 px-4">ID Pedido</th>
                     <th className="py-3 px-4">Data Aceite</th>
                     <th className="py-3 px-4">Cliente</th>
@@ -1733,13 +2102,22 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                     <th className="py-3 px-4 text-right">Valor Total (R$)</th>
                     <th className="py-3 px-4 text-right">Comissão SM (30%)</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredAcceptances.map((a) => {
                     const commission = (a.quotedPrice || 0) * 0.30;
                     return (
-                      <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={a.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(a.id) ? 'bg-amber-100/40' : ''}`}>
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(a.id)}
+                            onChange={() => toggleSelect(a.id)}
+                            className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                          />
+                        </td>
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">
                           {a.id}
                         </td>
@@ -1775,6 +2153,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                             {a.status === 'aprovado' ? 'Aceite Registrado' : a.status.replace('_', ' ')}
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleSingleZeroRequest(a.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Zerar e excluir este aceite de serviço"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -1797,6 +2184,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredCommissions.length > 0 && filteredCommissions.every(c => selectedIds.has(c.id))}
+                        onChange={() => toggleSelectAll(filteredCommissions.map(c => c.id))}
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        title="Selecionar todas as comissões visíveis"
+                      />
+                    </th>
                     <th className="py-3 px-4">ID Cobrança</th>
                     <th className="py-3 px-4">Vencimento</th>
                     <th className="py-3 px-4">Prestador / Fornecedor</th>
@@ -1805,11 +2201,20 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                     <th className="py-3 px-4 text-right">Comissão 30%</th>
                     <th className="py-3 px-4 text-center">Status Pagamento</th>
                     <th className="py-3 px-4 text-center">NF-e / Cobrança</th>
+                    <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredCommissions.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={c.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(c.id) ? 'bg-amber-100/40' : ''}`}>
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(c.id)}
+                          onChange={() => toggleSelect(c.id)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4 font-mono font-bold text-slate-900">
                         {c.id}
                       </td>
@@ -1854,6 +2259,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                           </span>
                         )}
                       </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => handleSingleZeroCharge(c.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Zerar e excluir esta cobrança"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1875,6 +2289,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredProfessionals.length > 0 && filteredProfessionals.every(p => selectedIds.has(p.id))}
+                        onChange={() => toggleSelectAll(filteredProfessionals.map(p => p.id))}
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        title="Selecionar todos os prestadores visíveis"
+                      />
+                    </th>
                     <th className="py-3 px-4">Prestador</th>
                     <th className="py-3 px-4">CPF / CNPJ</th>
                     <th className="py-3 px-4">Contato / Localidade</th>
@@ -1882,11 +2305,20 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                     <th className="py-3 px-4 text-center">Termo de Parceria (30%)</th>
                     <th className="py-3 px-4 text-center">Documentos</th>
                     <th className="py-3 px-4 text-center">Homologação</th>
+                    <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredProfessionals.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(p.id) ? 'bg-amber-100/40' : ''}`}>
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.id)}
+                          onChange={() => toggleSelect(p.id)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
                         {p.fullName}
                       </td>
@@ -1931,6 +2363,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                           {p.status.replace('_', ' ')}
                         </span>
                       </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => handleSingleZeroProfessional(p.id, p.fullName)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Zerar e excluir este prestador"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1945,6 +2386,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-100/80 text-slate-600 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={requests.length > 0 && requests.every(r => selectedIds.has(r.id))}
+                      onChange={() => toggleSelectAll(requests.map(r => r.id))}
+                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                      title="Selecionar todos os registros visíveis"
+                    />
+                  </th>
                   <th className="py-3 px-4">ID</th>
                   <th className="py-3 px-4">Data</th>
                   <th className="py-3 px-4">Cliente</th>
@@ -1953,6 +2403,7 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                   <th className="py-3 px-4 text-right">Valor Total (R$)</th>
                   <th className="py-3 px-4 text-right">Comissão SM (30%)</th>
                   <th className="py-3 px-4 text-center">Status Operacional</th>
+                  <th className="py-3 px-4 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1960,7 +2411,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                   const matchingCharge = charges.find(c => c.requestId === r.id);
                   const commissionVal = matchingCharge ? matchingCharge.commissionValue : ((r.quotedPrice || 0) * 0.30);
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={r.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.has(r.id) ? 'bg-amber-100/40' : ''}`}>
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleSelect(r.id)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4 font-mono font-bold text-slate-900">{r.id}</td>
                       <td className="py-3 px-4 text-slate-500">{formatDate(r.createdAt)}</td>
                       <td className="py-3 px-4 font-bold text-slate-900">{r.clientName}</td>
@@ -1972,6 +2431,15 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-full text-[10px] font-bold uppercase">
                           {r.status.replace('_', ' ')}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => handleSingleZeroRequest(r.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Zerar e excluir esta solicitação"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -2191,6 +2659,103 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL DE CONFIRMAÇÃO: ZERAR TODO O SISTEMA */}
+      {/* ========================================================================= */}
+      {isPurgeModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-red-200 space-y-5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  Zerar Todo o Sistema
+                </h3>
+                <span className="text-xs text-red-600 font-bold uppercase tracking-wider">
+                  Ação Irreversível • Zero Absoluto
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-red-50/70 border border-red-200 rounded-2xl p-4 text-xs text-red-900 space-y-2">
+              <p className="font-bold">
+                Atenção: Esta ação reinicializa completamente os dados da plataforma SM Express.
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-slate-700">
+                <li>Todas as solicitações de serviço, orçamentos e agendamentos serão excluídos.</li>
+                <li>Todos os cadastros de clientes serão limpos da base.</li>
+                <li>Todas as cobranças de comissão de 30% serão zeradas.</li>
+                <li><strong>Os 4 cartões de indicadores retornarão imediatamente a ZERO</strong> (0 clientes, 0 serviços, R$ 0,00 de volume, R$ 0,00 de ticket médio).</li>
+                <li>A conta oficial do administrador (suportesmservicos@gmail.com) e o catálogo de serviços serão preservados.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setIsPurgeModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+
+              <button
+                onClick={handleConfirmPurgeAll}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sim, Zerar Todo o Sistema</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL DE CONFIRMAÇÃO: ZERAR ITENS SELECIONADOS */}
+      {/* ========================================================================= */}
+      {isZeroSelectedModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-red-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Zerar {selectedIds.size} Itens Selecionados
+                </h3>
+                <span className="text-[11px] text-slate-500">
+                  Confirmação de exclusão em lote
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Deseja realmente zerar e excluir permanentemente os <strong>{selectedIds.size} registros selecionados</strong>? Esta ação atualizará os relatórios e os indicadores imediatamente.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setIsZeroSelectedModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+
+              <button
+                onClick={handleConfirmZeroSelected}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirmar e Zerar ({selectedIds.size})</span>
+              </button>
             </div>
           </div>
         </div>

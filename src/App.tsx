@@ -54,7 +54,7 @@ export default function App() {
 
   // Production Readiness Purge: Clears any leftover test/mock clients, quotes, requests, and payments.
   // Preserves only the master Admin account (suportesmservicos@gmail.com) and the service catalog.
-  const PRODUCTION_CLEAN_KEY = 'smexpress_clean_slate_production_v2026_ready';
+  const PRODUCTION_CLEAN_KEY = 'smexpress_live_zero_v8';
 
   const runImmediateProductionReset = () => {
     if (typeof window !== 'undefined') {
@@ -65,12 +65,16 @@ export default function App() {
           localStorage.removeItem('smexpress_professionals');
           localStorage.removeItem('smexpress_commissions');
           localStorage.removeItem('smexpress_charges');
+          localStorage.removeItem('smexpress_notifications_log');
           localStorage.removeItem('smexpress_goal_revenue');
           localStorage.removeItem('smexpress_goal_services');
           localStorage.removeItem('smexpress_goal_profs');
           localStorage.removeItem('smexpress_clean_slate_v3');
+          localStorage.removeItem('smexpress_live_production_v2026_reset_clean');
           localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
           
+          supabaseService.purgeAllRemoteData().catch(() => {});
+
           const rawCurrent = localStorage.getItem('smexpress_current_user');
           if (rawCurrent) {
             try {
@@ -83,8 +87,8 @@ export default function App() {
             }
           }
         }
-      } catch (e) {
-        console.error('Error during production reset:', e);
+      } catch {
+        // silent fallback
       }
     }
   };
@@ -340,8 +344,8 @@ export default function App() {
       if (remoteCharges.length > 0) setCommissionCharges(remoteCharges);
       if (remoteUsers.length > 0) setUsers(remoteUsers);
       if (remoteSettings) setGatewaySettings(remoteSettings);
-    } catch (err) {
-      console.warn('Could not load data from Supabase, maintaining local cache:', err);
+    } catch {
+      // Maintaining clean local cache
     }
   };
 
@@ -483,15 +487,79 @@ export default function App() {
     safeRemoveItem('smexpress_professionals');
     safeRemoveItem('smexpress_commissions');
     safeRemoveItem('smexpress_charges');
+    safeRemoveItem('smexpress_notifications_log');
     safeRemoveItem('smexpress_goal_revenue');
     safeRemoveItem('smexpress_goal_services');
     safeRemoveItem('smexpress_goal_profs');
     safeSetItem('smexpress_users', INITIAL_USERS);
+    notificationService.clearHistory();
+    supabaseService.purgeAllRemoteData().catch(() => {});
     if (currentUser && currentUser.email !== 'suportesmservicos@gmail.com' && currentUser.email !== 'rmonteir75@gmail.com') {
       setCurrentUser(null);
       safeRemoveItem('smexpress_current_user');
     }
-    showToast('Base de dados zerada com sucesso! Cadastros de clientes, orçamentos e pagamentos de teste foram removidos.', 'success');
+    showToast('Todo o sistema foi zerado com sucesso! Todos os clientes, solicitações e comissões retornaram a zero.', 'success');
+  };
+
+  const handleDeleteCharge = (chargeId: string) => {
+    setCommissionCharges(prev => prev.filter(c => c.id !== chargeId));
+    supabaseService.deleteCommissionCharge(chargeId).catch(() => {});
+    showToast('Cobrança de comissão excluída.', 'info');
+  };
+
+  const handleBatchDeleteRequests = (requestIds: string[]) => {
+    if (!requestIds.length) return;
+    setRequests(prev => prev.filter(r => !requestIds.includes(r.id)));
+    // Also remove associated commission charges if any
+    setCommissionCharges(prev => prev.filter(c => !requestIds.includes(c.requestId)));
+    requestIds.forEach(id => {
+      supabaseService.deleteServiceRequest(id).catch(() => {});
+    });
+    showToast(`${requestIds.length} solicitação(ões) zerada(s) e removida(s).`, 'info');
+  };
+
+  const handleBatchDeleteUsers = (userIds: string[]) => {
+    if (!userIds.length) return;
+    // Never delete master admin
+    const cleanUserIds = userIds.filter(id => id !== 'USR-ADM-001');
+    const usersToDelete = users.filter(u => cleanUserIds.includes(u.id) && u.email !== 'suportesmservicos@gmail.com');
+    const userEmails = usersToDelete.map(u => u.email?.toLowerCase().trim()).filter(Boolean);
+    const userPhones = usersToDelete.map(u => u.phone?.replace(/\D/g, '')).filter(Boolean);
+    const userNames = usersToDelete.map(u => u.name?.toLowerCase().trim()).filter(Boolean);
+
+    setUsers(prev => prev.filter(u => !cleanUserIds.includes(u.id) || u.email === 'suportesmservicos@gmail.com'));
+    
+    // Also remove requests associated with these deleted clients
+    setRequests(prev => prev.filter(r => {
+      const matchEmail = r.clientEmail && userEmails.includes(r.clientEmail.toLowerCase().trim());
+      const matchPhone = r.clientPhone && userPhones.includes(r.clientPhone.replace(/\D/g, ''));
+      const matchName = r.clientName && userNames.includes(r.clientName.toLowerCase().trim());
+      return !(matchEmail || matchPhone || matchName);
+    }));
+
+    cleanUserIds.forEach(id => {
+      supabaseService.deleteUser(id).catch(() => {});
+    });
+    showToast(`${cleanUserIds.length} cliente(s) e seus pedidos zerados com sucesso.`, 'info');
+  };
+
+  const handleBatchDeleteCharges = (chargeIds: string[]) => {
+    if (!chargeIds.length) return;
+    setCommissionCharges(prev => prev.filter(c => !chargeIds.includes(c.id)));
+    chargeIds.forEach(id => {
+      supabaseService.deleteCommissionCharge(id).catch(() => {});
+    });
+    showToast(`${chargeIds.length} cobrança(s) zerada(s) com sucesso.`, 'info');
+  };
+
+  const handleBatchDeleteProfessionals = (profIds: string[]) => {
+    if (!profIds.length) return;
+    setProfessionals(prev => prev.filter(p => !profIds.includes(p.id)));
+    setCommissionCharges(prev => prev.filter(c => !profIds.includes(c.professionalId)));
+    profIds.forEach(id => {
+      supabaseService.deleteProfessional(id).catch(() => {});
+    });
+    showToast(`${profIds.length} prestador(es) zerado(s) com sucesso.`, 'info');
   };
 
   const handleDeleteService = (serviceId: string) => {
@@ -991,6 +1059,11 @@ export default function App() {
             onAddUser={handleRegisterUser}
             onDeleteUser={handleDeleteUser}
             onDeleteRequest={handleDeleteRequest}
+            onDeleteCharge={handleDeleteCharge}
+            onBatchDeleteRequests={handleBatchDeleteRequests}
+            onBatchDeleteUsers={handleBatchDeleteUsers}
+            onBatchDeleteCharges={handleBatchDeleteCharges}
+            onBatchDeleteProfessionals={handleBatchDeleteProfessionals}
             onUpdateChargeStatus={handleUpdateChargeStatus}
             onIssueBoletoAndNfse={handleIssueBoletoAndNfse}
             onSaveGatewaySettings={handleSaveGatewaySettings}

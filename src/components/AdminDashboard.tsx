@@ -69,6 +69,11 @@ interface AdminDashboardProps {
   onDeleteService?: any;
   onResetServices?: any;
   onPurgeAllData?: any;
+  onDeleteCharge?: (chargeId: string) => void;
+  onBatchDeleteRequests?: (requestIds: string[]) => void;
+  onBatchDeleteUsers?: (userIds: string[]) => void;
+  onBatchDeleteCharges?: (chargeIds: string[]) => void;
+  onBatchDeleteProfessionals?: (profIds: string[]) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -83,6 +88,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddUser,
   onDeleteUser,
   onPurgeAllData,
+  onDeleteRequest,
+  onDeleteProfessional,
+  onDeleteCharge,
+  onBatchDeleteRequests,
+  onBatchDeleteUsers,
+  onBatchDeleteCharges,
+  onBatchDeleteProfessionals,
 }) => {
   // Admin Main Navigation Section: 'relatorios' | 'usuarios' | 'notificacoes'
   const [adminTab, setAdminTab] = useState<'relatorios' | 'usuarios' | 'notificacoes'>('relatorios');
@@ -150,8 +162,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             type: 'error'
           });
         }
-      } catch (err) {
-        console.error('Erro ao consultar CEP:', err);
+      } catch {
         setFormCepMessage({
           text: 'Falha ao buscar CEP.',
           type: 'error'
@@ -527,6 +538,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           users={users}
           services={services}
           onPurgeAllData={onPurgeAllData}
+          onDeleteRequest={onDeleteRequest}
+          onDeleteUser={onDeleteUser}
+          onDeleteProfessional={onDeleteProfessional}
+          onDeleteCharge={onDeleteCharge}
+          onBatchDeleteRequests={onBatchDeleteRequests}
+          onBatchDeleteUsers={onBatchDeleteUsers}
+          onBatchDeleteCharges={onBatchDeleteCharges}
+          onBatchDeleteProfessionals={onBatchDeleteProfessionals}
         />
       )}
 

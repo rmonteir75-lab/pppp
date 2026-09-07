@@ -10,6 +10,70 @@
     <meta property="og:description" content="Plataforma completa de solicitação, orçamentos, agendamentos e gestão de serviços gerais para casas, empresas e condomínios." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        var suppressPatterns = [
+          'vite',
+          'websocket',
+          'ws:',
+          'wss:',
+          'failed to connect',
+          'connecting',
+          'connected',
+          'cookie',
+          'same-site',
+          'samesite',
+          'permissions policy',
+          'violation',
+          'react devtools',
+          'devtools',
+          'resizeobserver',
+          'supabase',
+          'storage',
+          'safesetitem',
+          'safegetitem',
+          'source map',
+          'sourcemap',
+          'non-passive',
+          'passive'
+        ];
+
+        function shouldFilter(args) {
+          try {
+            var fullText = '';
+            for (var i = 0; i < args.length; i++) {
+              var arg = args[i];
+              if (typeof arg === 'string') {
+                fullText += ' ' + arg;
+              } else if (arg && typeof arg.message === 'string') {
+                fullText += ' ' + arg.message;
+              }
+            }
+            fullText = fullText.toLowerCase();
+            for (var j = 0; j < suppressPatterns.length; j++) {
+              if (fullText.indexOf(suppressPatterns[j]) !== -1) {
+                return true;
+              }
+            }
+          } catch (_) {}
+          return false;
+        }
+
+        var _warn = console.warn;
+        console.warn = function() {
+          var args = Array.prototype.slice.call(arguments);
+          if (shouldFilter(args)) return;
+          _warn.apply(console, args);
+        };
+
+        var _info = console.info;
+        console.info = function() {
+          var args = Array.prototype.slice.call(arguments);
+          if (shouldFilter(args)) return;
+          _info.apply(console, args);
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

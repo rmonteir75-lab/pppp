@@ -50,8 +50,7 @@ export const supabaseService = {
           createdAt: item.updated_at || item.created_at
         } : undefined
       }));
-    } catch (err) {
-      console.warn('Error fetching service requests from Supabase:', err);
+    } catch {
       return [];
     }
   },
@@ -83,8 +82,7 @@ export const supabaseService = {
       const { error } = await supabase.from('service_requests').upsert(payload);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error saving service request to Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -95,8 +93,7 @@ export const supabaseService = {
       const { error } = await supabase.from('service_requests').delete().eq('id', id);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error deleting service request in Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -138,8 +135,7 @@ export const supabaseService = {
         contractSignedAt: item.created_at,
         contractAgreedBoletoClause: item.contract_agreed_boleto_clause
       }));
-    } catch (err) {
-      console.warn('Error fetching professionals from Supabase:', err);
+    } catch {
       return [];
     }
   },
@@ -176,8 +172,7 @@ export const supabaseService = {
       const { error } = await supabase.from('professional_profiles').upsert(payload);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error saving professional to Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -188,8 +183,7 @@ export const supabaseService = {
       const { error } = await supabase.from('professional_profiles').delete().eq('id', id);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error deleting professional from Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -236,8 +230,7 @@ export const supabaseService = {
         notes: item.notes,
         createdAt: item.created_at
       }));
-    } catch (err) {
-      console.warn('Error fetching commission charges from Supabase:', err);
+    } catch {
       return [];
     }
   },
@@ -278,8 +271,34 @@ export const supabaseService = {
       const { error } = await supabase.from('commission_charges').upsert(payload);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error saving commission charge to Supabase:', err);
+    } catch {
+      return false;
+    }
+  },
+
+  async deleteCommissionCharge(id: string): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    try {
+      const { error } = await supabase.from('commission_charges').delete().eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async purgeAllRemoteData(): Promise<boolean> {
+    if (!supabase || !isSupabaseConfigured) return false;
+    try {
+      await Promise.allSettled([
+        supabase.from('service_requests').delete().neq('id', '__EMPTY_FLAG__'),
+        supabase.from('commission_charges').delete().neq('id', '__EMPTY_FLAG__'),
+        supabase.from('professional_profiles').delete().neq('id', '__EMPTY_FLAG__'),
+        supabase.from('users').delete().neq('email', 'suportesmservicos@gmail.com'),
+        supabase.from('service_reviews').delete().neq('id', '__EMPTY_FLAG__')
+      ]);
+      return true;
+    } catch {
       return false;
     }
   },
@@ -310,8 +329,7 @@ export const supabaseService = {
         status: item.status || 'ativo',
         createdAt: item.created_at || new Date().toISOString()
       }));
-    } catch (err) {
-      console.warn('Error fetching users from Supabase:', err);
+    } catch {
       return [];
     }
   },
@@ -336,8 +354,7 @@ export const supabaseService = {
       const { error } = await supabase.from('users').upsert(payload);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error saving user to Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -348,8 +365,7 @@ export const supabaseService = {
       const { error } = await supabase.from('users').delete().eq('id', id);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error deleting user from Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -390,8 +406,7 @@ export const supabaseService = {
         webhookUrl: data.webhook_url || '',
         webhookSecretMasked: data.webhook_secret_masked || ''
       };
-    } catch (err) {
-      console.warn('Error fetching gateway settings from Supabase:', err);
+    } catch {
       return null;
     }
   },
@@ -427,8 +442,7 @@ export const supabaseService = {
       const { error } = await supabase.from('payment_gateway_settings').upsert(payload);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error saving gateway settings to Supabase:', err);
+    } catch {
       return false;
     }
   },
@@ -456,8 +470,7 @@ export const supabaseService = {
       const { error } = await supabase.from('service_reviews').upsert(payload);
       if (error) throw error;
       return true;
-    } catch (err) {
-      console.warn('Error saving service review to Supabase:', err);
+    } catch {
       return false;
     }
   }

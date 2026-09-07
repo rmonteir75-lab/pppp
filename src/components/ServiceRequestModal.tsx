@@ -432,6 +432,11 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
     setLatestNotif(notif);
     onSubmitRequest(newRequest);
     setIsSuccess(true);
+
+    // Auto-disparo imediato: abre a conversa do WhatsApp Oficial já com o pedido preenchido
+    if (notif.whatsappUrlAdmin) {
+      notificationService.openWhatsApp(notif.whatsappUrlAdmin);
+    }
   };
 
   if (!isOpen) return null;
@@ -767,30 +772,31 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                     DISPARADO
                   </span>
                 </div>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  Aviso registrado com sucesso para o WhatsApp <strong>{ADMIN_WHATSAPP_FORMATTED}</strong> e e-mail <strong>{ADMIN_EMAIL}</strong>.
+                <p className="text-[11px] text-emerald-900 leading-relaxed font-medium">
+                  Aviso pré-formatado gerado para o WhatsApp <strong>{ADMIN_WHATSAPP_FORMATTED}</strong> e e-mails <strong>{ADMIN_EMAIL}</strong> e <strong>rmonteir75@gmail.com</strong>.
+                  Caso a conversa do WhatsApp não tenha aberto automaticamente no seu navegador, clique no botão principal abaixo para enviar:
                 </p>
                 {latestNotif && (
-                  <div className="space-y-2 pt-1">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <a
-                        href={latestNotif.whatsappUrlAdmin}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-colors"
-                        title={`WhatsApp Oficial do Administrador (${ADMIN_WHATSAPP_FORMATTED})`}
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>WhatsApp Adm ({ADMIN_WHATSAPP_FORMATTED})</span>
-                        <ExternalLink className="w-3 h-3 opacity-80" />
-                      </a>
+                  <div className="space-y-2.5 pt-1">
+                    <a
+                      href={latestNotif.whatsappUrlAdmin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl font-black text-sm shadow-md transition-all animate-pulse"
+                      title={`WhatsApp Oficial do Administrador (${ADMIN_WHATSAPP_FORMATTED})`}
+                    >
+                      <MessageSquare className="w-4 h-4 flex-shrink-0" />
+                      <span>🟢 Abrir WhatsApp Oficial Agora ({ADMIN_WHATSAPP_FORMATTED})</span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                    </a>
 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {latestNotif.whatsappUrlAdminBackup && (
                         <a
                           href={latestNotif.whatsappUrlAdminBackup}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl font-bold text-xs transition-colors border border-slate-700"
+                          className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl font-bold text-xs transition-colors border border-slate-700"
                           title={`WhatsApp Backup do Administrador (${ADMIN_WHATSAPP_BACKUP_FORMATTED})`}
                         >
                           <MessageSquare className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
@@ -800,12 +806,13 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
 
                       <a
                         href={latestNotif.mailtoUrlAdmin}
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold text-xs transition-colors"
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold text-xs transition-colors"
                         title={`Enviar e-mail para ${ADMIN_EMAIL}`}
                       >
                         <Mail className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                         <span>Enviar E-mail ao Adm</span>
                       </a>
+                    </div>
 
                       {latestNotif.whatsappUrlClient && (
                         <a
@@ -819,7 +826,6 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                           <span>Confirmar no Meu WhatsApp</span>
                         </a>
                       )}
-                    </div>
 
                     {/* Botão para Copiar o Texto da Mensagem */}
                     {latestNotif.messageContentAdmin && (

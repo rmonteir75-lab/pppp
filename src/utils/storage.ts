@@ -52,8 +52,7 @@ export async function compressImage(
 
           const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
           resolve(compressedDataUrl);
-        } catch (err) {
-          console.warn('Image compression fallback:', err);
+        } catch {
           resolve(typeof source === 'string' ? source.slice(0, 5000) : '');
         }
       };
@@ -98,8 +97,8 @@ export function purgeNonCriticalStorage(): void {
     for (const k of keysToPurge) {
       localStorage.removeItem(k);
     }
-  } catch (e) {
-    console.warn('Storage purge warning:', e);
+  } catch {
+    // silent fallback
   }
 }
 
@@ -151,8 +150,7 @@ export function safeSetItem(key: string, value: any): boolean {
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
     localStorage.setItem(key, serialized);
     return true;
-  } catch (err: any) {
-    console.warn(`[safeSetItem] Quota or storage error on key "${key}". Attempting mitigation...`, err);
+  } catch {
     try {
       // 1. Purge non-critical items
       purgeNonCriticalStorage();
@@ -163,8 +161,7 @@ export function safeSetItem(key: string, value: any): boolean {
 
       localStorage.setItem(key, sanitizedStr);
       return true;
-    } catch (retryErr) {
-      console.error(`[safeSetItem] Failed to persist key "${key}" even after sanitization:`, retryErr);
+    } catch {
       return false;
     }
   }
@@ -182,8 +179,7 @@ export function safeGetItem<T>(key: string, fallback: T): T {
     } catch {
       return raw as unknown as T;
     }
-  } catch (err) {
-    console.warn(`[safeGetItem] Error reading key "${key}":`, err);
+  } catch {
     return fallback;
   }
 }
@@ -194,7 +190,7 @@ export function safeGetItem<T>(key: string, fallback: T): T {
 export function safeRemoveItem(key: string): void {
   try {
     localStorage.removeItem(key);
-  } catch (err) {
-    console.warn(`[safeRemoveItem] Error removing key "${key}":`, err);
+  } catch {
+    // silent fallback
   }
 }

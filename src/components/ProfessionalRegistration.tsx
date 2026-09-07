@@ -203,8 +203,8 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
         } else {
           setErrors(prev => ({ ...prev, cep: 'CEP não encontrado.' }));
         }
-      } catch (err) {
-        console.error('Erro ao consultar CEP:', err);
+      } catch {
+        setErrors(prev => ({ ...prev, cep: 'Não foi possível consultar o CEP no momento.' }));
       } finally {
         setIsCepLoading(false);
       }

@@ -183,8 +183,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         } else {
           setRegCepMessage({ text: 'CEP não encontrado', type: 'error' });
         }
-      } catch (err) {
-        console.error('Erro ao consultar CEP:', err);
+      } catch {
         setRegCepMessage({ text: 'Erro ao consultar CEP', type: 'error' });
       } finally {
         setIsRegCepLoading(false);
@@ -210,8 +209,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         } else {
           setEditCepMessage({ text: 'CEP não encontrado', type: 'error' });
         }
-      } catch (err) {
-        console.error('Erro ao consultar CEP:', err);
+      } catch {
         setEditCepMessage({ text: 'Erro ao consultar CEP', type: 'error' });
       } finally {
         setIsEditCepLoading(false);
