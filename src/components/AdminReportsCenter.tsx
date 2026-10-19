@@ -544,8 +544,51 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
   // =========================================================================
   // 4. DATASET: Relatório de Prestadores & Conformidade
   // =========================================================================
+  const allCombinedProfessionals = useMemo(() => {
+    const map = new Map<string, ProfessionalProfile>();
+    professionals.forEach(p => {
+      const key = p.cpfCnpj ? p.cpfCnpj.replace(/\D/g, '') : p.id;
+      map.set(key, p);
+    });
+
+    users.forEach(u => {
+      if (u.role === 'profissional') {
+        const key = u.cpfCnpj ? u.cpfCnpj.replace(/\D/g, '') : u.id;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: `PRO-${u.id.replace('USR-', '')}`,
+            fullName: u.name,
+            cpfCnpj: u.cpfCnpj || '',
+            phone: u.phone,
+            email: u.email,
+            city: u.city || 'Taubaté',
+            state: u.state || 'SP',
+            cep: u.cep,
+            neighborhood: u.neighborhood,
+            categories: ['outros_servicos'],
+            experienceYears: '1',
+            hasVehicle: true,
+            hasOwnTools: true,
+            status: (u.status === 'ativo' ? 'aprovado' : 'pendente_aprovacao'),
+            rating: 5.0,
+            completedJobs: 0,
+            createdAt: u.createdAt,
+            photoUrl: u.avatarUrl || u.photo3x4Url,
+            photo3x4Url: u.photo3x4Url || u.avatarUrl,
+            contractSigned: true,
+            contractSignedAt: u.createdAt,
+            contractAgreedCommission: 30,
+            contractAgreedBoletoClause: true
+          });
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }, [professionals, users]);
+
   const filteredProfessionals = useMemo(() => {
-    return professionals.filter(prof => {
+    return allCombinedProfessionals.filter(prof => {
       const matchesSearch = 
         prof.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         prof.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -566,7 +609,7 @@ export const AdminReportsCenter: React.FC<AdminReportsCenterProps> = ({
 
       return matchesSearch && matchesStatus && matchesCategory && matchesDate;
     });
-  }, [professionals, searchTerm, statusFilter, categoryFilter, dateRangePreset, startDate, endDate]);
+  }, [allCombinedProfessionals, searchTerm, statusFilter, categoryFilter, dateRangePreset, startDate, endDate]);
 
   // =========================================================================
   // Estatísticas e Métricas Dinâmicas por Relatório

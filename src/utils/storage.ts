@@ -82,6 +82,107 @@ export async function compressImage(
   });
 }
 
+const DB_NAME = 'SMExpressDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'app_data';
+
+function openDB(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      resolve(null);
+      return;
+    }
+    try {
+      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+      request.onerror = () => resolve(null);
+      request.onsuccess = () => resolve(request.result);
+      request.onupgradeneeded = (e: any) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Stores a value asynchronously in IndexedDB without size limits.
+ */
+export async function idbSet(key: string, value: any): Promise<boolean> {
+  try {
+    const db = await openDB();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.put(value, key);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => resolve(false);
+      } catch {
+        resolve(false);
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads a value asynchronously from IndexedDB.
+ */
+export async function idbGet<T>(key: string, fallback?: T): Promise<T | null> {
+  try {
+    const db = await openDB();
+    if (!db) return fallback ?? null;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (req.result !== undefined && req.result !== null) {
+            resolve(req.result as T);
+          } else {
+            resolve(fallback ?? null);
+          }
+        };
+        req.onerror = () => resolve(fallback ?? null);
+      } catch {
+        resolve(fallback ?? null);
+      }
+    });
+  } catch {
+    return fallback ?? null;
+  }
+}
+
+/**
+ * Removes a key from IndexedDB.
+ */
+export async function idbRemove(key: string): Promise<boolean> {
+  try {
+    const db = await openDB();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => resolve(false);
+      } catch {
+        resolve(false);
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Cleans up non-critical localStorage entries when storage quota is tight.
  */
@@ -118,9 +219,8 @@ function sanitizeDataForStorage<T>(data: T): T {
     const pruneItem = (item: any) => {
       if (item && typeof item === 'object') {
         for (const key in item) {
-          if (typeof item[key] === 'string' && item[key].startsWith('data:image')) {
-            if (item[key].length > 40000) {
-              // Replace oversized raw base64 with a tiny 1x1 placeholder or empty
+          if (typeof item[key] === 'string' && (item[key].startsWith('data:image') || item[key].startsWith('data:application'))) {
+            if (item[key].length > 30000) {
               item[key] = '';
             }
           } else if (typeof item[key] === 'object') {
@@ -144,8 +244,12 @@ function sanitizeDataForStorage<T>(data: T): T {
 
 /**
  * Safely saves data to localStorage without throwing QuotaExceededError or crashing React.
+ * Simultaneously backs up full data to IndexedDB to ensure zero data loss.
  */
 export function safeSetItem(key: string, value: any): boolean {
+  // Always asynchronously back up full uncompressed object to IndexedDB!
+  idbSet(key, value).catch(() => {});
+
   try {
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
     localStorage.setItem(key, serialized);
@@ -185,7 +289,7 @@ export function safeGetItem<T>(key: string, fallback: T): T {
 }
 
 /**
- * Safely removes an item from localStorage.
+ * Safely removes an item from localStorage and IndexedDB.
  */
 export function safeRemoveItem(key: string): void {
   try {
@@ -193,4 +297,6 @@ export function safeRemoveItem(key: string): void {
   } catch {
     // silent fallback
   }
+  idbRemove(key).catch(() => {});
 }
+

@@ -32,8 +32,76 @@ import { SupabaseSyncModal } from './components/SupabaseSyncModal';
 import { Toast, ToastType } from './components/Toast';
 import { supabaseService } from './services/supabaseService';
 import { isSupabaseConfigured } from './lib/supabase';
-import { safeSetItem, safeRemoveItem } from './utils/storage';
+import { safeSetItem, safeGetItem, safeRemoveItem, idbGet } from './utils/storage';
 import { notificationService, ADMIN_EMAIL, ADMIN_WHATSAPP_FORMATTED } from './services/notificationService';
+
+// Merge users without duplicate email or id, preserving updated fields
+function mergeUsersList(base: UserAccount[], incoming: UserAccount[]): UserAccount[] {
+  const result = [...base];
+  for (const item of incoming) {
+    if (!item || !item.id) continue;
+    const idx = result.findIndex(u => 
+      u.id === item.id || 
+      (u.email && item.email && u.email.toLowerCase().trim() === item.email.toLowerCase().trim()) ||
+      (u.cpfCnpj && item.cpfCnpj && u.cpfCnpj.replace(/\D/g, '') === item.cpfCnpj.replace(/\D/g, ''))
+    );
+    if (idx >= 0) {
+      result[idx] = { ...result[idx], ...item };
+    } else {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+// Merge professionals without duplicate id or CPF
+function mergeProfessionalsList(base: ProfessionalProfile[], incoming: ProfessionalProfile[]): ProfessionalProfile[] {
+  const result = [...base];
+  for (const item of incoming) {
+    if (!item || !item.id) continue;
+    const idx = result.findIndex(p => 
+      p.id === item.id || 
+      (p.cpfCnpj && item.cpfCnpj && p.cpfCnpj.replace(/\D/g, '') === item.cpfCnpj.replace(/\D/g, '')) ||
+      (p.email && item.email && p.email.toLowerCase().trim() === item.email.toLowerCase().trim())
+    );
+    if (idx >= 0) {
+      result[idx] = { ...result[idx], ...item };
+    } else {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+// Merge service requests without duplicates
+function mergeRequestsList(base: ServiceRequest[], incoming: ServiceRequest[]): ServiceRequest[] {
+  const result = [...base];
+  for (const item of incoming) {
+    if (!item || !item.id) continue;
+    const idx = result.findIndex(r => r.id === item.id);
+    if (idx >= 0) {
+      result[idx] = { ...result[idx], ...item };
+    } else {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+// Merge commission charges without duplicates
+function mergeChargesList(base: CommissionCharge[], incoming: CommissionCharge[]): CommissionCharge[] {
+  const result = [...base];
+  for (const item of incoming) {
+    if (!item || !item.id) continue;
+    const idx = result.findIndex(c => c.id === item.id);
+    if (idx >= 0) {
+      result[idx] = { ...result[idx], ...item };
+    } else {
+      result.push(item);
+    }
+  }
+  return result;
+}
 
 export default function App() {
   // Navigation & Frame Mode
@@ -52,105 +120,23 @@ export default function App() {
   const [forceRegisterInAuth, setForceRegisterInAuth] = useState(false);
   const [authRequiredNotice, setAuthRequiredNotice] = useState<string>('');
 
-  // Production Readiness Purge: Clears any leftover test/mock clients, quotes, requests, and payments.
-  // Preserves only the master Admin account (suportesmservicos@gmail.com) and the service catalog.
-  const PRODUCTION_CLEAN_KEY = 'smexpress_live_zero_v8';
-
-  const runImmediateProductionReset = () => {
-    if (typeof window !== 'undefined') {
-      try {
-        if (!localStorage.getItem(PRODUCTION_CLEAN_KEY)) {
-          localStorage.setItem(PRODUCTION_CLEAN_KEY, 'true');
-          localStorage.removeItem('smexpress_requests');
-          localStorage.removeItem('smexpress_professionals');
-          localStorage.removeItem('smexpress_commissions');
-          localStorage.removeItem('smexpress_charges');
-          localStorage.removeItem('smexpress_notifications_log');
-          localStorage.removeItem('smexpress_goal_revenue');
-          localStorage.removeItem('smexpress_goal_services');
-          localStorage.removeItem('smexpress_goal_profs');
-          localStorage.removeItem('smexpress_clean_slate_v3');
-          localStorage.removeItem('smexpress_live_production_v2026_reset_clean');
-          localStorage.setItem('smexpress_users', JSON.stringify(INITIAL_USERS));
-          
-          supabaseService.purgeAllRemoteData().catch(() => {});
-
-          const rawCurrent = localStorage.getItem('smexpress_current_user');
-          if (rawCurrent) {
-            try {
-              const parsed = JSON.parse(rawCurrent);
-              if (parsed?.email !== 'suportesmservicos@gmail.com' && parsed?.email !== 'rmonteir75@gmail.com') {
-                localStorage.removeItem('smexpress_current_user');
-              }
-            } catch {
-              localStorage.removeItem('smexpress_current_user');
-            }
-          }
-        }
-      } catch {
-        // silent fallback
-      }
-    }
-  };
-
-  // Run immediately on script execution
-  runImmediateProductionReset();
-
-  // Users & Auth State (Clean State initialized only with Master Admin)
+  // Users & Auth State - Permanently persists registered clients and professionals
   const [users, setUsers] = useState<UserAccount[]>(() => {
-    runImmediateProductionReset();
-    const saved = localStorage.getItem('smexpress_users');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleaned = parsed.map(u => {
-            if (u.email === 'rmonteir75@gmail.com' || u.id === 'USR-ADM-001' || u.email === 'suportesmservicos@gmail.com') {
-              return { ...u, email: 'suportesmservicos@gmail.com', password: '2026Smexpress*' };
-            }
-            return u;
-          }).filter(u => 
-            !['USR-CLI-001', 'USR-PRO-001', 'USR-ADM-999'].includes(u.id) &&
-            u.email !== 'admin@smexpress.com' &&
-            u.email !== 'joao.cliente@gmail.com' &&
-            u.email !== 'marcos.piscineiro@smexpress.com' &&
-            !u.email.toLowerCase().includes('teste') &&
-            !u.name.toLowerCase().includes('teste')
-          );
-          const hasAdmin = cleaned.some((u: UserAccount) => u.email === 'suportesmservicos@gmail.com' || u.role === 'admin');
-          return hasAdmin ? cleaned : [...INITIAL_USERS, ...cleaned];
-        }
-      } catch {
-        return INITIAL_USERS;
-      }
+    const saved = safeGetItem<UserAccount[]>('smexpress_users', INITIAL_USERS);
+    if (Array.isArray(saved) && saved.length > 0) {
+      const hasAdmin = saved.some((u: UserAccount) => u.email === 'suportesmservicos@gmail.com' || u.role === 'admin');
+      return hasAdmin ? saved : [...INITIAL_USERS, ...saved];
     }
     return INITIAL_USERS;
   });
 
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    runImmediateProductionReset();
-    const saved = localStorage.getItem('smexpress_current_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (
-          parsed &&
-          typeof parsed === 'object' &&
-          parsed.id &&
-          !['USR-CLI-001', 'USR-PRO-001'].includes(parsed.id) &&
-          parsed.email !== 'admin@smexpress.com' &&
-          parsed.email !== 'joao.cliente@gmail.com' &&
-          parsed.email !== 'marcos.piscineiro@smexpress.com'
-        ) {
-          if (parsed.email === 'rmonteir75@gmail.com' || parsed.id === 'USR-ADM-001' || parsed.email === 'suportesmservicos@gmail.com') {
-            return { ...parsed, email: 'suportesmservicos@gmail.com', password: '2026Smexpress*' };
-          }
-          return parsed;
-        }
-        return null;
-      } catch {
-        return null;
+    const saved = safeGetItem<UserAccount | null>('smexpress_current_user', null);
+    if (saved && typeof saved === 'object' && saved.id) {
+      if (saved.email === 'rmonteir75@gmail.com' || saved.id === 'USR-ADM-001' || saved.email === 'suportesmservicos@gmail.com') {
+        return { ...saved, email: 'suportesmservicos@gmail.com', password: '2026Smexpress*' };
       }
+      return saved;
     }
     return null;
   });
@@ -158,25 +144,9 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register' | 'profile' | 'forgot_password' | 'admin_access'>('login');
 
-  // App Data State (Clean Production Zero State)
+  // App Data State - Preserves real customer and supplier requests
   const [requests, setRequests] = useState<ServiceRequest[]>(() => {
-    runImmediateProductionReset();
-    const saved = localStorage.getItem('smexpress_requests');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(r => 
-            !['REQ-1001', 'REQ-1002', 'REQ-1003', 'REQ-1004', 'REQ-1005', 'REQ-1006', 'REQ-1007', 'REQ-1008', 'REQ-1009'].includes(r.id) &&
-            !r.clientName.toLowerCase().includes('teste')
-          );
-        }
-        return [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
+    return safeGetItem<ServiceRequest[]>('smexpress_requests', []);
   });
   
   // Dynamic metrics calculated accurately from actual requests
@@ -189,73 +159,28 @@ export default function App() {
       .reduce((acc, r) => acc + (r.quotedPrice || 0), 0)
   };
   
+  // Suppliers / Professionals State - Permanently maintained across refreshes and restarts
   const [professionals, setProfessionals] = useState<ProfessionalProfile[]>(() => {
-    runImmediateProductionReset();
-    const saved = localStorage.getItem('smexpress_professionals');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(p => 
-            !['PRO-101', 'PRO-102', 'PRO-103', 'PRO-104', 'PRO-105'].includes(p.id) &&
-            !p.fullName.toLowerCase().includes('teste') &&
-            !p.email?.toLowerCase().includes('piscineiro')
-          );
-        }
-        return [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
+    return safeGetItem<ProfessionalProfile[]>('smexpress_professionals', []);
   });
 
   const [commissionCharges, setCommissionCharges] = useState<CommissionCharge[]>(() => {
-    runImmediateProductionReset();
-    const saved = localStorage.getItem('smexpress_commissions');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(c => 
-            !['COM-9041', 'COM-9042', 'COM-9043', 'COM-9044'].includes(c.id) &&
-            !c.professionalName?.toLowerCase().includes('marcos piscineiro')
-          );
-        }
-        return [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
+    return safeGetItem<CommissionCharge[]>('smexpress_commissions', []);
   });
 
   const [gatewaySettings, setGatewaySettings] = useState<PaymentGatewaySettings>(() => {
-    const saved = localStorage.getItem('smexpress_gateway_settings');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          ...DEFAULT_PAYMENT_GATEWAY_SETTINGS,
-          ...parsed,
-          environment: 'production'
-        };
-      } catch {
-        return DEFAULT_PAYMENT_GATEWAY_SETTINGS;
-      }
-    }
-    return DEFAULT_PAYMENT_GATEWAY_SETTINGS;
+    const saved = safeGetItem<PaymentGatewaySettings>('smexpress_gateway_settings', DEFAULT_PAYMENT_GATEWAY_SETTINGS);
+    return {
+      ...DEFAULT_PAYMENT_GATEWAY_SETTINGS,
+      ...saved,
+      environment: 'production'
+    };
   });
 
   const [services, setServices] = useState<ServiceDefinition[]>(() => {
-    const saved = localStorage.getItem('smexpress_services');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.filter((s: ServiceDefinition) => s.id !== 'manutencao_residencial');
-        }
-      } catch {}
+    const saved = safeGetItem<ServiceDefinition[]>('smexpress_services', SERVICES_LIST);
+    if (Array.isArray(saved) && saved.length > 0) {
+      return saved.filter((s: ServiceDefinition) => s.id !== 'manutencao_residencial');
     }
     return SERVICES_LIST;
   });
@@ -269,31 +194,41 @@ export default function App() {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
   const [selectedRequestForReview, setSelectedRequestForReview] = useState<ServiceRequest | null>(null);
 
-  // Automated clean slate on boot
+  // Asynchronous recovery from IndexedDB on startup (ensures photos, documents, and records are fully loaded)
   useEffect(() => {
-    const purgeKey = PRODUCTION_CLEAN_KEY;
-    if (!localStorage.getItem(purgeKey)) {
-      safeSetItem(purgeKey, 'true');
-      safeRemoveItem('smexpress_requests');
-      safeRemoveItem('smexpress_professionals');
-      safeRemoveItem('smexpress_commissions');
-      safeRemoveItem('smexpress_charges');
-      safeRemoveItem('smexpress_goal_revenue');
-      safeRemoveItem('smexpress_goal_services');
-      safeRemoveItem('smexpress_goal_profs');
-      safeSetItem('smexpress_users', INITIAL_USERS);
-      setRequests([]);
-      setProfessionals([]);
-      setCommissionCharges([]);
-      setUsers(INITIAL_USERS);
-      if (currentUser && currentUser.email !== 'suportesmservicos@gmail.com' && currentUser.email !== 'rmonteir75@gmail.com') {
-        setCurrentUser(null);
-        safeRemoveItem('smexpress_current_user');
+    let isMounted = true;
+    const restoreFromIndexedDB = async () => {
+      try {
+        const [idbUsers, idbProfs, idbReqs, idbCharges] = await Promise.all([
+          idbGet<UserAccount[]>('smexpress_users'),
+          idbGet<ProfessionalProfile[]>('smexpress_professionals'),
+          idbGet<ServiceRequest[]>('smexpress_requests'),
+          idbGet<CommissionCharge[]>('smexpress_commissions')
+        ]);
+
+        if (!isMounted) return;
+
+        if (idbUsers && Array.isArray(idbUsers) && idbUsers.length > 0) {
+          setUsers(prev => mergeUsersList(prev, idbUsers));
+        }
+        if (idbProfs && Array.isArray(idbProfs) && idbProfs.length > 0) {
+          setProfessionals(prev => mergeProfessionalsList(prev, idbProfs));
+        }
+        if (idbReqs && Array.isArray(idbReqs) && idbReqs.length > 0) {
+          setRequests(prev => mergeRequestsList(prev, idbReqs));
+        }
+        if (idbCharges && Array.isArray(idbCharges) && idbCharges.length > 0) {
+          setCommissionCharges(prev => mergeChargesList(prev, idbCharges));
+        }
+      } catch {
+        // silent fallback
       }
-    }
+    };
+    restoreFromIndexedDB();
+    return () => { isMounted = false; };
   }, []);
 
-  // Save users and current user to localStorage
+  // Save users and current user to localStorage + IndexedDB
   useEffect(() => {
     safeSetItem('smexpress_users', users);
   }, [users]);
@@ -306,7 +241,7 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Save requests, professionals, commissions, gatewaySettings and services to localStorage
+  // Save requests, professionals, commissions, gatewaySettings and services to localStorage + IndexedDB
   useEffect(() => {
     safeSetItem('smexpress_services', services);
   }, [services]);
@@ -327,7 +262,7 @@ export default function App() {
     safeSetItem('smexpress_gateway_settings', gatewaySettings);
   }, [gatewaySettings]);
 
-  // Load from Supabase on mount if configured
+  // Load from Supabase on mount if configured with non-destructive merge
   const loadDataFromSupabase = async () => {
     if (!isSupabaseConfigured) return;
     try {
@@ -339,10 +274,10 @@ export default function App() {
         supabaseService.getGatewaySettings()
       ]);
 
-      if (remoteReqs.length > 0) setRequests(remoteReqs);
-      if (remoteProfs.length > 0) setProfessionals(remoteProfs);
-      if (remoteCharges.length > 0) setCommissionCharges(remoteCharges);
-      if (remoteUsers.length > 0) setUsers(remoteUsers);
+      if (remoteReqs && remoteReqs.length > 0) setRequests(prev => mergeRequestsList(prev, remoteReqs));
+      if (remoteProfs && remoteProfs.length > 0) setProfessionals(prev => mergeProfessionalsList(prev, remoteProfs));
+      if (remoteCharges && remoteCharges.length > 0) setCommissionCharges(prev => mergeChargesList(prev, remoteCharges));
+      if (remoteUsers && remoteUsers.length > 0) setUsers(prev => mergeUsersList(prev, remoteUsers));
       if (remoteSettings) setGatewaySettings(remoteSettings);
     } catch {
       // Maintaining clean local cache
@@ -389,9 +324,42 @@ export default function App() {
   };
 
   const handleRegisterUser = (newUser: UserAccount) => {
-    setUsers(prev => [newUser, ...prev]);
+    setUsers(prev => mergeUsersList(prev, [newUser]));
     setCurrentUser(newUser);
     supabaseService.upsertUser(newUser).catch(() => {});
+
+    // If new user registered as professional, also ensure corresponding supplier profile exists
+    if (newUser.role === 'profissional') {
+      const profId = `PRO-${newUser.id.replace('USR-', '')}`;
+      const newProf: ProfessionalProfile = {
+        id: profId,
+        fullName: newUser.name,
+        cpfCnpj: newUser.cpfCnpj || '',
+        phone: newUser.phone,
+        email: newUser.email,
+        city: newUser.city || 'Taubaté',
+        state: newUser.state || 'SP',
+        cep: newUser.cep,
+        neighborhood: newUser.neighborhood,
+        categories: ['outros_servicos'],
+        experienceYears: '1',
+        hasVehicle: true,
+        hasOwnTools: true,
+        status: 'aprovado',
+        rating: 5.0,
+        completedJobs: 0,
+        createdAt: new Date().toISOString(),
+        photoUrl: newUser.avatarUrl || newUser.photo3x4Url,
+        photo3x4Url: newUser.photo3x4Url || newUser.avatarUrl,
+        contractSigned: true,
+        contractSignedAt: new Date().toISOString(),
+        contractAgreedCommission: 30,
+        contractAgreedBoletoClause: true
+      };
+      setProfessionals(prev => mergeProfessionalsList(prev, [newProf]));
+      supabaseService.upsertProfessional(newProf).catch(() => {});
+    }
+
     showToast(`Cadastro realizado com sucesso! Bem-vindo, ${newUser.name}.`, 'success');
 
     // If there was a pending service request draft that forced registration, complete and submit it!
@@ -425,7 +393,7 @@ export default function App() {
         createdAt: new Date().toISOString()
       };
 
-      setRequests(prev => [completedReq, ...prev]);
+      setRequests(prev => mergeRequestsList(prev, [completedReq]));
       setClientTab('pedidos');
       supabaseService.upsertServiceRequest(completedReq).catch(() => {});
       setPendingRequestDraft(null);
@@ -449,6 +417,23 @@ export default function App() {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
+    }
+    // Also update corresponding professional profile if role is profissional
+    if (updatedUser.role === 'profissional') {
+      setProfessionals(prev => prev.map(p => {
+        if (p.id === updatedUser.id.replace('USR-', '') || (p.email && updatedUser.email && p.email.toLowerCase() === updatedUser.email.toLowerCase())) {
+          return {
+            ...p,
+            fullName: updatedUser.name,
+            phone: updatedUser.phone,
+            city: updatedUser.city,
+            state: updatedUser.state,
+            cep: updatedUser.cep,
+            neighborhood: updatedUser.neighborhood
+          };
+        }
+        return p;
+      }));
     }
     supabaseService.upsertUser(updatedUser).catch(() => {});
     showToast('Dados cadastrais atualizados com sucesso!', 'success');
@@ -585,7 +570,7 @@ export default function App() {
   };
 
   const handleCreateRequest = (newRequest: ServiceRequest) => {
-    setRequests(prev => [newRequest, ...prev]);
+    setRequests(prev => mergeRequestsList(prev, [newRequest]));
     setClientTab('pedidos'); // Automatically switch to orders tracking
     supabaseService.upsertServiceRequest(newRequest).catch(() => {});
     // ServiceRequestModal already triggers notificationService.notifyNewRequest to present live links
@@ -597,28 +582,64 @@ export default function App() {
     supabaseService.deleteServiceRequest(requestId).catch(() => {});
   };
 
-  const handleRegisterProfessional = (newProf: Omit<ProfessionalProfile, 'id' | 'createdAt' | 'rating' | 'completedJobs' | 'status'>) => {
+  const handleRegisterProfessional = (newProf: Omit<ProfessionalProfile, 'id' | 'createdAt' | 'rating' | 'completedJobs' | 'status'> & { id?: string }) => {
+    const profId = newProf.id || `PRO-${Math.floor(100 + Math.random() * 900)}`;
     const createdProf: ProfessionalProfile = {
       ...newProf,
-      id: `PRO-${Math.floor(100 + Math.random() * 900)}`,
+      id: profId,
       createdAt: new Date().toISOString(),
       rating: 5.0,
       completedJobs: 0,
       status: 'pendente_aprovacao'
     };
-    setProfessionals(prev => [createdProf, ...prev]);
+
+    setProfessionals(prev => mergeProfessionalsList(prev, [createdProf]));
+
+    // Synchronize corresponding UserAccount so supplier can log in and is visible in User Management
+    const cleanDigits = createdProf.cpfCnpj ? createdProf.cpfCnpj.replace(/\D/g, '') : '';
+    const userAccountForProf: UserAccount = {
+      id: `USR-${profId}`,
+      name: createdProf.fullName,
+      email: createdProf.email || `fornecedor.${profId.toLowerCase()}@smexpress.com`,
+      phone: createdProf.phone,
+      role: 'profissional',
+      password: cleanDigits.slice(0, 8) || 'Smexpress123*',
+      cpfCnpj: createdProf.cpfCnpj,
+      cep: createdProf.cep,
+      neighborhood: createdProf.neighborhood,
+      city: createdProf.city || 'Taubaté',
+      state: createdProf.state || 'SP',
+      avatarUrl: createdProf.photoUrl || createdProf.photo3x4Url || '',
+      photo3x4Url: createdProf.photo3x4Url || createdProf.photoUrl || '',
+      status: 'ativo',
+      isCompleteRegistration: true,
+      notes: `Fornecedor homologado. Especialidades: ${createdProf.categories.join(', ')}.`,
+      createdAt: new Date().toISOString()
+    };
+
+    setUsers(prev => mergeUsersList(prev, [userAccountForProf]));
+
     supabaseService.upsertProfessional(createdProf).catch(() => {});
+    supabaseService.upsertUser(userAccountForProf).catch(() => {});
     notificationService.notifyNewProfessional(createdProf);
-    showToast('Cadastro recebido! O administrador foi notificado via WhatsApp e e-mail para aprovação.', 'success');
+    showToast(`Cadastro de fornecedor #${profId} recebido com sucesso! Dados preservados no sistema.`, 'success');
   };
 
   const handleApproveProfessional = (profId: string) => {
     setProfessionals(prev => {
       const updated = prev.map(p => p.id === profId ? { ...p, status: 'aprovado' as const } : p);
       const target = updated.find(p => p.id === profId);
-      if (target) supabaseService.upsertProfessional(target).catch(() => {});
+      if (target) {
+        supabaseService.upsertProfessional(target).catch(() => {});
+        setUsers(uPrev => uPrev.map(u => 
+          (u.id === `USR-${profId}` || (target.email && u.email.toLowerCase() === target.email.toLowerCase()))
+            ? { ...u, status: 'ativo' as const }
+            : u
+        ));
+      }
       return updated;
     });
+    showToast(`Fornecedor ${profId} homologado e aprovado com sucesso!`, 'success');
   };
 
   const handleDeleteProfessional = (profId: string) => {

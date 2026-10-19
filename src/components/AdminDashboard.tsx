@@ -408,8 +408,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     document.body.removeChild(link);
   };
 
+  // Unify user accounts and suppliers so every registered person is visible in Admin
+  const allUnifiedUsers = React.useMemo(() => {
+    const map = new Map<string, UserAccount>();
+    users.forEach(u => {
+      const key = u.email ? u.email.toLowerCase().trim() : u.id;
+      map.set(key, u);
+    });
+
+    professionals.forEach(p => {
+      const key = p.email ? p.email.toLowerCase().trim() : (p.cpfCnpj ? p.cpfCnpj.replace(/\D/g, '') : p.id);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: `USR-${p.id}`,
+          name: p.fullName,
+          email: p.email || `fornecedor.${p.id.toLowerCase()}@smexpress.com`,
+          phone: p.phone,
+          role: 'profissional',
+          password: p.cpfCnpj ? p.cpfCnpj.replace(/\D/g, '').slice(0, 8) || 'Smexpress123*' : 'Smexpress123*',
+          cpfCnpj: p.cpfCnpj,
+          cep: p.cep,
+          neighborhood: p.neighborhood,
+          city: p.city,
+          state: p.state,
+          avatarUrl: p.photoUrl || p.photo3x4Url,
+          photo3x4Url: p.photo3x4Url || p.photoUrl,
+          status: p.status === 'aprovado' ? 'ativo' : 'pendente',
+          isCompleteRegistration: true,
+          notes: `Fornecedor homologado. Especialidades: ${p.categories.join(', ')}.`,
+          createdAt: p.createdAt
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [users, professionals]);
+
   // Filter users
-  const filteredUsers = users.filter(u => {
+  const filteredUsers = allUnifiedUsers.filter(u => {
     const matchesSearch = 
       u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -428,10 +464,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   // Metrics
-  const totalUsersCount = users.length;
-  const activeLoginsCount = users.filter(u => u.status === 'ativo').length;
-  const blockedLoginsCount = users.filter(u => u.status === 'bloqueado').length;
-  const adminsCount = users.filter(u => u.role === 'admin').length;
+  const totalUsersCount = allUnifiedUsers.length;
+  const activeLoginsCount = allUnifiedUsers.filter(u => u.status === 'ativo').length;
+  const blockedLoginsCount = allUnifiedUsers.filter(u => u.status === 'bloqueado').length;
+  const adminsCount = allUnifiedUsers.filter(u => u.role === 'admin').length;
 
   // Strict Admin Gate: Prevent non-admin/unauthenticated users from seeing internal data
   if (!currentUser || currentUser.role !== 'admin') {
@@ -755,10 +791,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onChange={(e) => setRoleFilter(e.target.value as any)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 text-xs focus:outline-none focus:border-amber-400"
               >
-                <option value="todos">Todos os Papéis ({users.length})</option>
-                <option value="cliente">Clientes ({users.filter(u => u.role === 'cliente').length})</option>
-                <option value="profissional">Profissionais ({users.filter(u => u.role === 'profissional').length})</option>
-                <option value="admin">Administradores ({users.filter(u => u.role === 'admin').length})</option>
+                <option value="todos">Todos os Papéis ({allUnifiedUsers.length})</option>
+                <option value="cliente">Clientes ({allUnifiedUsers.filter(u => u.role === 'cliente').length})</option>
+                <option value="profissional">Profissionais / Fornecedores ({allUnifiedUsers.filter(u => u.role === 'profissional').length})</option>
+                <option value="admin">Administradores ({allUnifiedUsers.filter(u => u.role === 'admin').length})</option>
               </select>
 
               {/* Status filter */}

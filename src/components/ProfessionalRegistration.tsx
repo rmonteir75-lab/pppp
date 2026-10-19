@@ -50,7 +50,7 @@ interface ProfessionalRegistrationProps {
   requests?: ServiceRequest[];
   currentUser?: UserAccount | null;
   onOpenAuth?: (mode?: 'login' | 'register') => void;
-  onRegisterProfessional: (profile: Omit<ProfessionalProfile, 'id' | 'createdAt' | 'rating' | 'completedJobs' | 'status'>) => void;
+  onRegisterProfessional: (profile: Omit<ProfessionalProfile, 'id' | 'createdAt' | 'rating' | 'completedJobs' | 'status'> & { id?: string }) => void;
   onSendQuote?: (
     requestId: string, 
     price: number, 
@@ -581,8 +581,10 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
 
     const ipRandom = `${Math.floor(177 + Math.random() * 12)}.${Math.floor(10 + Math.random() * 200)}.${Math.floor(10 + Math.random() * 200)}.${Math.floor(10 + Math.random() * 200)}`;
     const hashRandom = `(SHA256: ${Math.random().toString(36).substring(2, 8)}...${Math.random().toString(36).substring(2, 6)})`;
+    const generatedId = `PRO-${Math.floor(100 + Math.random() * 900)}`;
 
     onRegisterProfessional({
+      id: generatedId,
       fullName: fullName.trim(),
       cpfCnpj: cpfCnpj.trim(),
       phone: phone.trim(),
@@ -611,7 +613,6 @@ export const ProfessionalRegistration: React.FC<ProfessionalRegistrationProps> =
       contractAgreedBoletoClause: true
     });
 
-    const generatedId = `PRO-${Math.floor(100 + Math.random() * 900)}`;
     setRegisteredSuccess(generatedId);
   };
 
